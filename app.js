@@ -4,7 +4,8 @@ const STORAGE_KEYS = {
   currentUser: 'oficiosya_currentUser',
   reviews: 'oficiosya_reviews',
   notifications: 'oficiosya_notifications',
-  photos: 'oficiosya_photos'
+  photos: 'oficiosya_photos',
+  quotes: 'oficiosya_quotes'
 };
 
 // ===== PROVINCIAS Y LOCALIDADES (principales) =====
@@ -974,7 +975,16 @@ function verPerfil(profId) {
       ${reviewsHtml}
     </div>
     
-    <div style="margin-top:2rem;text-align:center;">
+    <div style="margin-top:2rem;text-align:center;display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap;">
+      ${puedeResenar ? `
+        <button class="btn btn-primary" onclick="abrirModalPresupuesto('${prof.id}', '${prof.nombre.replace(/'/g, "\\'")}')">
+          <i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto
+        </button>
+      ` : !currentUser ? `
+        <button class="btn btn-primary" onclick="showSection('login')">
+          <i class="fas fa-file-invoice-dollar"></i> Iniciá sesión para pedir presupuesto
+        </button>
+      ` : ''}
       <button class="btn btn-secondary" onclick="showSection('search')">
         <i class="fas fa-arrow-left"></i> Volver a la búsqueda
       </button>
@@ -1365,22 +1375,37 @@ function showNotifications() {
       <div class="empty-notifs">
         <i class="fas fa-bell-slash"></i>
         <p>No tenés notificaciones todavía.</p>
-        <p style="font-size:0.9rem;">Te avisaremos cuando alguien deje una reseña en tu perfil.</p>
+        <p style="font-size:0.9rem;">Te avisaremos cuando dejen una reseña o te pidan un presupuesto.</p>
       </div>
     `;
   } else {
-    container.innerHTML = notifs.map(n => `
-      <div class="notif-item ${n.read ? '' : 'unread'}">
-        <div class="notif-icon">
-          <i class="fas fa-star"></i>
+    container.innerHTML = notifs.map(n => {
+      const icon = n.tipo === 'presupuesto' ? 'fa-file-invoice-dollar' : 'fa-star';
+      let extra = '';
+      if (n.tipo === 'presupuesto' && n.quoteId) {
+        const q = getQuotes().find(x => x.id === n.quoteId);
+        if (q) {
+          const fotos = (q.fotos || []).map(f => `<img src="${f}" alt="foto" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;">`).join('');
+          extra = `
+            <p style="font-size:0.85rem;margin-top:0.4rem;"><strong>Contacto:</strong> ${q.telefono} · <strong>Urgencia:</strong> ${q.urgencia}</p>
+            ${fotos ? `<div style="margin-top:0.4rem;">${fotos}</div>` : ''}
+          `;
+        }
+      }
+      return `
+        <div class="notif-item ${n.read ? '' : 'unread'}">
+          <div class="notif-icon">
+            <i class="fas ${icon}"></i>
+          </div>
+          <div class="notif-content">
+            <p><strong>${n.mensaje}</strong></p>
+            ${n.detalle ? `<p style="font-size:0.9rem;color:var(--text-light);">${n.detalle}</p>` : ''}
+            ${extra}
+            <span class="notif-time">${formatDateTime(n.fecha)}</span>
+          </div>
         </div>
-        <div class="notif-content">
-          <p><strong>${n.mensaje}</strong></p>
-          ${n.detalle ? `<p style="font-size:0.9rem;color:var(--text-light);">${n.detalle}</p>` : ''}
-          <span class="notif-time">${formatDateTime(n.fecha)}</span>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
   
   showSection('notifications');
@@ -1396,6 +1421,200 @@ function formatDateTime(isoStr) {
   const d = new Date(isoStr);
   return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+// ===== PRESUPUESTOS =====
+let quoteFotosData = [];
+
+function getQuotes() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.quotes) || '[]');
+}
+
+function saveQuotes(quotes) {
+  localStorage.setItem(STORAGE_KEYS.quotes, JSON.stringify(quotes));
+}
+
+function abrirModalPresupuesto(profId, profNombre) {
+  const user = getCurrentUser();
+  if (!user || user.tipo !== 'cliente') {
+    showToast('Debés iniciar sesión como cliente para solicitar presupuestos', 'error');
+    showSection('login');
+    return;
+  }
+
+  document.getElementById('quoteProfId').value = profId;
+  document.getElementById('quoteProfName').textContent = 'Profesional: ' + profNombre;
+  document.getElementById('quoteDescripcion').value = '';
+  document.getElementById('quoteTelefono').value = user.telefono || '';
+  document.getElementById('quoteUrgencia').value = 'Normal';
+  quoteFotosData = [];
+  document.getElementById('quotePhotosPreview').innerHTML = '';
+  const input = document.getElementById('quoteFotosInput');
+  if (input) input.value = '';
+
+  document.getElementById('quoteModal').classList.add('active');
+}
+
+function cerrarModalPresupuesto() {
+  document.getElementById('quoteModal').classList.remove('active');
+}
+
+function previewQuoteFotos(e) {
+  const files = Array.from(e.target.files || []);
+  const remaining = 4 - quoteFotosData.length;
+  if (remaining <= 0) {
+    showToast('Máximo 4 fotos', 'error');
+    return;
+  }
+
+  const toRead = files.slice(0, remaining);
+  toRead.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Alguna imagen supera 2MB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      quoteFotosData.push(ev.target.result);
+      renderQuotePreview();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderQuotePreview() {
+  const container = document.getElementById('quotePhotosPreview');
+  container.innerHTML = quoteFotosData.map((src, i) => `
+    <div style="position:relative;">
+      <img src="${src}" alt="Foto ${i + 1}">
+      <button type="button" onclick="quitarQuoteFoto(${i})" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border:none;border-radius:50%;background:#c1121f;color:white;cursor:pointer;font-size:0.7rem;">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function quitarQuoteFoto(index) {
+  quoteFotosData.splice(index, 1);
+  renderQuotePreview();
+}
+
+function enviarPresupuesto(e) {
+  e.preventDefault();
+  const user = getCurrentUser();
+  if (!user || user.tipo !== 'cliente') return;
+
+  const profId = document.getElementById('quoteProfId').value;
+  const descripcion = document.getElementById('quoteDescripcion').value.trim();
+  const telefono = document.getElementById('quoteTelefono').value.trim();
+  const urgencia = document.getElementById('quoteUrgencia').value;
+
+  if (!descripcion) {
+    showToast('Completá la descripción del trabajo', 'error');
+    return;
+  }
+
+  const quote = {
+    id: 'q_' + Date.now(),
+    profId,
+    clienteId: user.id,
+    clienteNombre: user.nombre,
+    clienteEmail: user.email,
+    telefono,
+    descripcion,
+    urgencia,
+    fotos: [...quoteFotosData],
+    fecha: new Date().toISOString(),
+    estado: 'pendiente'
+  };
+
+  const quotes = getQuotes();
+  quotes.push(quote);
+  saveQuotes(quotes);
+
+  // Notificación al profesional
+  saveNotification(profId, {
+    id: 'n_' + Date.now(),
+    tipo: 'presupuesto',
+    mensaje: `${user.nombre} te solicitó un presupuesto (${urgencia}).`,
+    detalle: descripcion.substring(0, 120) + (descripcion.length > 120 ? '...' : ''),
+    quoteId: quote.id,
+    fecha: new Date().toISOString(),
+    read: false
+  });
+
+  cerrarModalPresupuesto();
+  showToast('¡Solicitud de presupuesto enviada! El profesional te contactará.');
+}
+
+// ===== SOPORTE TÉCNICO (CHAT) =====
+function toggleSupportChat() {
+  const chat = document.getElementById('supportChat');
+  if (!chat) return;
+  chat.classList.toggle('open');
+  if (chat.classList.contains('open')) {
+    const input = document.getElementById('supportInput');
+    if (input) setTimeout(() => input.focus(), 100);
+  }
+}
+
+function appendSupportMsg(text, type) {
+  const box = document.getElementById('supportMessages');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'support-msg ' + type;
+  div.innerHTML = `<p>${text}</p>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function respuestaSoporte(mensaje) {
+  const m = mensaje.toLowerCase();
+  if (m.includes('sesión') || m.includes('login') || m.includes('ingresar') || m.includes('contraseña')) {
+    return 'Para iniciar sesión usá el menú <strong>Iniciar Sesión</strong> con el email y contraseña con los que te registraste. Si olvidaste la clave, por ahora tenés que registrarte de nuevo (demo sin recuperación de contraseña).';
+  }
+  if (m.includes('presupuesto') || m.includes('cotiz')) {
+    return 'Para pedir un presupuesto: 1) Iniciá sesión como <strong>cliente</strong>. 2) Buscá un profesional. 3) Entrá a su perfil y tocá <strong>Solicitar presupuesto</strong>. Podés adjuntar fotos y describir el problema.';
+  }
+  if (m.includes('profesional') || m.includes('oficio') || m.includes('registrar')) {
+    return 'En <strong>Registrarse → Soy Persona de Oficio</strong> completá tus datos, DNI, oficio, zona y experiencia. Después podés subir fotos de trabajos en Mi Perfil.';
+  }
+  if (m.includes('reseña') || m.includes('valor')) {
+    return 'Las reseñas las dejan los clientes desde el perfil del profesional (calidad, tiempo y precio). El profesional recibe una notificación.';
+  }
+  if (m.includes('hola') || m.includes('buenas') || m.includes('buen día')) {
+    return '¡Hola! Contame en qué te ayudo: registro, presupuestos, reseñas o inicio de sesión.';
+  }
+  return 'Gracias por tu mensaje. Podés consultar sobre: registro, inicio de sesión, cómo pedir presupuesto o dejar reseñas. Si el problema continúa, escribí con más detalle y te orientamos.';
+}
+
+function supportQuickReply(text) {
+  appendSupportMsg(text, 'user');
+  setTimeout(() => {
+    appendSupportMsg(respuestaSoporte(text), 'bot');
+  }, 450);
+}
+
+function enviarMensajeSoporte(e) {
+  e.preventDefault();
+  const input = document.getElementById('supportInput');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  appendSupportMsg(text, 'user');
+  input.value = '';
+  setTimeout(() => {
+    appendSupportMsg(respuestaSoporte(text), 'bot');
+  }, 500);
+}
+
+window.toggleSupportChat = toggleSupportChat;
+window.supportQuickReply = supportQuickReply;
+window.enviarMensajeSoporte = enviarMensajeSoporte;
+window.abrirModalPresupuesto = abrirModalPresupuesto;
+window.cerrarModalPresupuesto = cerrarModalPresupuesto;
+window.previewQuoteFotos = previewQuoteFotos;
+window.quitarQuoteFoto = quitarQuoteFoto;
+window.enviarPresupuesto = enviarPresupuesto;
 
 // ===== START =====
 document.addEventListener('DOMContentLoaded', init);
