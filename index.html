@@ -39,6 +39,7 @@
   <section id="home" class="section active">
     <header class="hero">
       <div class="hero-content">
+        <img src="logo.jpg" alt="Oficios YA!" class="hero-logo">
         <h1>Encuentra profesionales de confianza <span>cerca de ti</span></h1>
         <p>Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
         <div class="hero-buttons">
@@ -527,5 +528,14 @@
   <div id="toast" class="toast"></div>
 
   <script src="app.js"></script>
+  <script>
+    // Verificación: si app.js no cargó, avisar
+    window.addEventListener('load', function () {
+      if (typeof cargarLocalidades !== 'function') {
+        console.error('Oficios YA: no se pudo cargar app.js. Revisá que esté en la misma carpeta que index.html');
+        alert('No se pudo cargar app.js.\n\nAsegurate de tener estos 3 archivos en la MISMA carpeta:\n- index.html\n- styles.css\n- app.js');
+      }
+    });
+  </script>
 </body>
 </html>
