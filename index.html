@@ -4,9 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Oficios YA! - Encuentra profesionales de confianza</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Estilos críticos del logo (por si styles.css tarda o falla en GitHub Pages) -->
+  <style>
+    .hero-logo {
+      width: 160px !important;
+      height: 160px !important;
+      max-width: 160px !important;
+      object-fit: contain;
+      margin: 0 auto 1.5rem;
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      display: block;
+      animation: floatUpDown 2.5s ease-in-out infinite;
+    }
+    @keyframes floatUpDown {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-18px); }
+    }
+    @media (max-width: 480px) {
+      .hero-logo {
+        width: 120px !important;
+        height: 120px !important;
+        max-width: 120px !important;
+        border-radius: 18px;
+      }
+    }
+  </style>
 </head>
 <body>
   <!-- Navbar -->
@@ -39,7 +65,7 @@
   <section id="home" class="section active">
     <header class="hero">
       <div class="hero-content">
-        <img src="logo.jpg" alt="Oficios YA!" class="hero-logo">
+        <img src="./logo.jpg" alt="Oficios YA!" class="hero-logo" width="160" height="160">
         <h1>Encuentra profesionales de confianza <span>cerca de ti</span></h1>
         <p>Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
         <div class="hero-buttons">
@@ -524,10 +550,87 @@
     </div>
   </div>
 
+  <!-- Modal solicitar presupuesto -->
+  <div id="quoteModal" class="modal">
+    <div class="modal-content modal-lg">
+      <span class="close-modal" onclick="cerrarModalPresupuesto()">&times;</span>
+      <h3><i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto</h3>
+      <p class="modal-subtitle" id="quoteProfName"></p>
+      <form onsubmit="enviarPresupuesto(event)">
+        <input type="hidden" id="quoteProfId">
+        <div class="form-group">
+          <label>Descripción del problema / trabajo</label>
+          <textarea id="quoteDescripcion" rows="4" required placeholder="Contá qué necesitás, desde cuándo, urgencia, etc."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Fotos del problema (opcional, hasta 4)</label>
+          <div class="quote-photos-preview" id="quotePhotosPreview"></div>
+          <label class="photo-upload quote-upload-btn">
+            <i class="fas fa-camera"></i>
+            <span>Agregar fotos</span>
+            <input type="file" id="quoteFotosInput" accept="image/*" multiple onchange="previewQuoteFotos(event)">
+          </label>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tu teléfono de contacto</label>
+            <input type="tel" id="quoteTelefono" required placeholder="11 1234-5678">
+          </div>
+          <div class="form-group">
+            <label>Urgencia</label>
+            <select id="quoteUrgencia" required>
+              <option value="Normal">Normal</option>
+              <option value="Urgente">Urgente</option>
+              <option value="Puede esperar">Puede esperar</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fas fa-paper-plane"></i> Enviar solicitud
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Soporte técnico: burbuja + chat -->
+  <div id="supportBubble" class="support-bubble" onclick="toggleSupportChat()" title="Soporte técnico">
+    <i class="fas fa-headset"></i>
+    <span class="support-pulse"></span>
+  </div>
+
+  <div id="supportChat" class="support-chat">
+    <div class="support-chat-header">
+      <div class="support-chat-title">
+        <div class="support-avatar"><i class="fas fa-robot"></i></div>
+        <div>
+          <strong>Soporte Oficios YA!</strong>
+          <span class="support-status">En línea</span>
+        </div>
+      </div>
+      <button type="button" class="support-close" onclick="toggleSupportChat()">&times;</button>
+    </div>
+    <div class="support-chat-messages" id="supportMessages">
+      <div class="support-msg bot">
+        <p>¡Hola! 👋 Soy el asistente de <strong>Oficios YA!</strong></p>
+        <p>¿En qué puedo ayudarte?</p>
+      </div>
+      <div class="support-quick">
+        <button type="button" onclick="supportQuickReply('No puedo iniciar sesión')">No puedo iniciar sesión</button>
+        <button type="button" onclick="supportQuickReply('Cómo solicito un presupuesto')">Cómo solicito un presupuesto</button>
+        <button type="button" onclick="supportQuickReply('Cómo me registro como profesional')">Registro como profesional</button>
+        <button type="button" onclick="supportQuickReply('Otro consulta')">Otra consulta</button>
+      </div>
+    </div>
+    <form class="support-chat-input" onsubmit="enviarMensajeSoporte(event)">
+      <input type="text" id="supportInput" placeholder="Escribí tu mensaje..." autocomplete="off">
+      <button type="submit"><i class="fas fa-paper-plane"></i></button>
+    </form>
+  </div>
+
   <!-- Toast notifications -->
   <div id="toast" class="toast"></div>
 
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
   <script>
     // Verificación: si app.js no cargó, avisar
     window.addEventListener('load', function () {
