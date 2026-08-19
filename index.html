@@ -46,14 +46,41 @@
         <li><a href="#" onclick="showSection('search')">Buscar Oficios</a></li>
         <li id="navRegister"><a href="#" onclick="showSection('register')">Registrarse</a></li>
         <li id="navLogin"><a href="#" onclick="showSection('login')">Iniciar Sesión</a></li>
-        <li id="navProfile" style="display:none;"><a href="#" onclick="showMyProfile()">Mi Perfil</a></li>
         <li id="navNotifications" style="display:none;">
           <a href="#" onclick="showNotifications()" class="notif-btn">
             <i class="fas fa-bell"></i>
             <span class="badge" id="notifBadge" style="display:none;">0</span>
           </a>
         </li>
-        <li id="navLogout" style="display:none;"><a href="#" onclick="logout()">Cerrar Sesión</a></li>
+        <li id="navUserMenu" class="user-menu" style="display:none;">
+          <button type="button" class="user-menu-btn" id="userMenuBtn" onclick="toggleUserMenu(event)" aria-label="Menú de perfil">
+            <span class="user-avatar" id="userAvatar">?</span>
+            <span class="user-menu-name" id="userMenuName"></span>
+            <i class="fas fa-chevron-down user-menu-caret"></i>
+          </button>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-dropdown-header">
+              <span class="user-avatar user-avatar-lg" id="userAvatarDrop">?</span>
+              <div>
+                <strong id="userDropName">Usuario</strong>
+                <small id="userDropRole">Cliente</small>
+              </div>
+            </div>
+            <a href="#" class="user-dropdown-item" id="menuEditProfile" onclick="abrirEditarPerfil(); return false;">
+              <i class="fas fa-user-edit"></i> Editar mi perfil
+            </a>
+            <a href="#" class="user-dropdown-item" id="menuMyProfile" style="display:none;" onclick="showMyProfile(); closeUserMenu(); return false;">
+              <i class="fas fa-id-card"></i> Mi perfil profesional
+            </a>
+            <a href="#" class="user-dropdown-item" id="menuNotifs" style="display:none;" onclick="showNotifications(); closeUserMenu(); return false;">
+              <i class="fas fa-bell"></i> Notificaciones
+            </a>
+            <hr class="user-dropdown-divider">
+            <a href="#" class="user-dropdown-item user-dropdown-logout" onclick="logout(); return false;">
+              <i class="fas fa-sign-out-alt"></i> Cerrar sesión
+            </a>
+          </div>
+        </li>
       </ul>
       <button class="menu-toggle" onclick="toggleMenu()">
         <i class="fas fa-bars"></i>
@@ -464,6 +491,52 @@
     <div class="container">
       <div id="myProfileContent">
         <!-- Contenido dinámico -->
+      </div>
+    </div>
+  </section>
+
+  <!-- EDIT ACCOUNT (cliente o acceso rápido a datos) -->
+  <section id="editAccount" class="section">
+    <div class="container">
+      <h2 class="section-title"><i class="fas fa-user-edit"></i> Editar mi perfil</h2>
+      <div class="login-card" style="max-width:560px;">
+        <form id="editAccountForm" onsubmit="guardarCuenta(event)">
+          <div class="form-group">
+            <label>Nombre completo</label>
+            <input type="text" id="accNombre" required>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="accEmail" disabled title="El email no se puede cambiar">
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" id="accTelefono" required>
+          </div>
+          <div id="accClienteFields">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Provincia</label>
+                <select id="accProvincia" onchange="cargarLocalidades('accProvincia','accLocalidad')">
+                  <option value="">Seleccionar provincia...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Localidad</label>
+                <select id="accLocalidad">
+                  <option value="">Seleccionar...</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="accOficioHint" style="display:none;margin-bottom:1rem;">
+            <p style="color:var(--text-light);font-size:0.9rem;">
+              Para editar oficio, experiencia, fotos y más, usá
+              <a href="#" onclick="showMyProfile(); return false;" style="color:var(--primary);font-weight:600;">Mi perfil profesional</a>.
+            </p>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Guardar cambios</button>
+        </form>
       </div>
     </div>
   </section>
