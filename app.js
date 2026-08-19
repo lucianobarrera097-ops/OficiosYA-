@@ -568,35 +568,150 @@ function toggleMenu() {
   document.getElementById('navLinks').classList.toggle('open');
 }
 
+function getUserIniciales(nombre) {
+  if (!nombre) return '?';
+  return nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+}
+
 function updateNav() {
   const user = getCurrentUser();
   const navRegister = document.getElementById('navRegister');
   const navLogin = document.getElementById('navLogin');
-  const navProfile = document.getElementById('navProfile');
-  const navLogout = document.getElementById('navLogout');
   const navNotifications = document.getElementById('navNotifications');
+  const navUserMenu = document.getElementById('navUserMenu');
+
+  closeUserMenu();
 
   if (user) {
     navRegister.style.display = 'none';
     navLogin.style.display = 'none';
-    navLogout.style.display = 'block';
-    
+    if (navUserMenu) navUserMenu.style.display = 'block';
+
+    const iniciales = getUserIniciales(user.nombre);
+    const firstName = user.nombre.split(' ')[0];
+    const avatar = document.getElementById('userAvatar');
+    const avatarDrop = document.getElementById('userAvatarDrop');
+    const nameEl = document.getElementById('userMenuName');
+    const dropName = document.getElementById('userDropName');
+    const dropRole = document.getElementById('userDropRole');
+
+    if (avatar) avatar.textContent = iniciales;
+    if (avatarDrop) avatarDrop.textContent = iniciales;
+    if (nameEl) nameEl.textContent = firstName;
+    if (dropName) dropName.textContent = user.nombre;
+    if (dropRole) dropRole.textContent = user.tipo === 'oficio' ? (user.oficio || 'Profesional') : 'Cliente';
+
+    const menuMyProfile = document.getElementById('menuMyProfile');
+    const menuNotifs = document.getElementById('menuNotifs');
+
     if (user.tipo === 'oficio') {
-      navProfile.style.display = 'block';
-      navNotifications.style.display = 'block';
+      if (navNotifications) navNotifications.style.display = 'block';
+      if (menuMyProfile) menuMyProfile.style.display = 'flex';
+      if (menuNotifs) menuNotifs.style.display = 'flex';
       updateNotifBadge();
     } else {
-      navProfile.style.display = 'none';
-      navNotifications.style.display = 'none';
+      if (navNotifications) navNotifications.style.display = 'none';
+      if (menuMyProfile) menuMyProfile.style.display = 'none';
+      if (menuNotifs) menuNotifs.style.display = 'none';
     }
   } else {
     navRegister.style.display = 'block';
     navLogin.style.display = 'block';
-    navProfile.style.display = 'none';
-    navLogout.style.display = 'none';
-    navNotifications.style.display = 'none';
+    if (navUserMenu) navUserMenu.style.display = 'none';
+    if (navNotifications) navNotifications.style.display = 'none';
   }
 }
+
+function toggleUserMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('navUserMenu');
+  if (!menu) return;
+  menu.classList.toggle('open');
+}
+
+function closeUserMenu() {
+  const menu = document.getElementById('navUserMenu');
+  if (menu) menu.classList.remove('open');
+}
+
+function abrirEditarPerfil() {
+  closeUserMenu();
+  const user = getCurrentUser();
+  if (!user) {
+    showSection('login');
+    return;
+  }
+
+  // Profesionales: ir al perfil completo editable
+  if (user.tipo === 'oficio') {
+    showMyProfile();
+    // Scroll al formulario de edición
+    setTimeout(() => {
+      const form = document.querySelector('#myProfileContent .detail-card form');
+      if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return;
+  }
+
+  // Clientes: sección de cuenta
+  document.getElementById('accNombre').value = user.nombre || '';
+  document.getElementById('accEmail').value = user.email || '';
+  document.getElementById('accTelefono').value = user.telefono || '';
+
+  const provSel = document.getElementById('accProvincia');
+  if (provSel && provSel.options.length <= 1) {
+    LISTA_PROVINCIAS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      provSel.appendChild(opt);
+    });
+  }
+  if (provSel) {
+    provSel.value = user.provincia || '';
+    cargarLocalidades('accProvincia', 'accLocalidad', user.localidad || '');
+  }
+
+  document.getElementById('accClienteFields').style.display = 'block';
+  document.getElementById('accOficioHint').style.display = 'none';
+  showSection('editAccount');
+}
+
+function guardarCuenta(e) {
+  e.preventDefault();
+  const user = getCurrentUser();
+  if (!user) return;
+
+  const users = getUsers();
+  const idx = users.findIndex(u => u.id === user.id);
+  if (idx === -1) return;
+
+  users[idx].nombre = document.getElementById('accNombre').value.trim();
+  users[idx].telefono = document.getElementById('accTelefono').value.trim();
+
+  if (user.tipo === 'cliente') {
+    users[idx].provincia = document.getElementById('accProvincia').value;
+    users[idx].localidad = document.getElementById('accLocalidad').value;
+  }
+
+  saveUsers(users);
+  setCurrentUser(users[idx]);
+  updateNav();
+  showToast('Perfil actualizado correctamente');
+  showSection('home');
+}
+
+// Cerrar menú al hacer clic fuera
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('navUserMenu');
+  if (!menu || !menu.classList.contains('open')) return;
+  if (!menu.contains(e.target)) closeUserMenu();
+});
+
+window.toggleUserMenu = toggleUserMenu;
+window.closeUserMenu = closeUserMenu;
+window.abrirEditarPerfil = abrirEditarPerfil;
+window.guardarCuenta = guardarCuenta;
 
 function updateNotifBadge() {
   const user = getCurrentUser();
