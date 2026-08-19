@@ -171,21 +171,15 @@
             </select>
           </div>
           <div class="filter-group">
-            <label><i class="fas fa-map-marker-alt"></i> Localidad</label>
-            <input type="text" id="filterLocalidad" placeholder="Ej: Palermo, Centro...">
+            <label><i class="fas fa-map"></i> Provincia</label>
+            <select id="filterProvincia" onchange="cargarLocalidades('filterProvincia','filterLocalidad')">
+              <option value="">Todas las provincias</option>
+            </select>
           </div>
           <div class="filter-group">
-            <label><i class="fas fa-map"></i> Provincia</label>
-            <select id="filterProvincia">
-              <option value="">Todas las provincias</option>
-              <option value="Buenos Aires">Buenos Aires</option>
-              <option value="CABA">CABA</option>
-              <option value="Córdoba">Córdoba</option>
-              <option value="Santa Fe">Santa Fe</option>
-              <option value="Mendoza">Mendoza</option>
-              <option value="Tucumán">Tucumán</option>
-              <option value="Entre Ríos">Entre Ríos</option>
-              <option value="Salta">Salta</option>
+            <label><i class="fas fa-map-marker-alt"></i> Localidad</label>
+            <select id="filterLocalidad" disabled>
+              <option value="">Primero elegí provincia</option>
             </select>
           </div>
           <button class="btn btn-primary" onclick="realizarBusqueda()">
@@ -239,21 +233,15 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Localidad</label>
-              <input type="text" id="clienteLocalidad" required placeholder="Tu localidad">
+              <label>Provincia</label>
+              <select id="clienteProvincia" required onchange="cargarLocalidades('clienteProvincia','clienteLocalidad')">
+                <option value="">Seleccionar provincia...</option>
+              </select>
             </div>
             <div class="form-group">
-              <label>Provincia</label>
-              <select id="clienteProvincia" required>
-                <option value="">Seleccionar...</option>
-                <option value="Buenos Aires">Buenos Aires</option>
-                <option value="CABA">CABA</option>
-                <option value="Córdoba">Córdoba</option>
-                <option value="Santa Fe">Santa Fe</option>
-                <option value="Mendoza">Mendoza</option>
-                <option value="Tucumán">Tucumán</option>
-                <option value="Entre Ríos">Entre Ríos</option>
-                <option value="Salta">Salta</option>
+              <label>Localidad</label>
+              <select id="clienteLocalidad" required disabled>
+                <option value="">Primero elegí provincia</option>
               </select>
             </div>
           </div>
@@ -286,6 +274,16 @@
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>DNI</label>
+              <input type="text" id="oficioDni" required pattern="[0-9]{7,8}" maxlength="8" placeholder="Ej: 30123456" title="Ingresá tu DNI sin puntos (7 u 8 dígitos)">
+            </div>
+            <div class="form-group">
+              <label>Edad</label>
+              <input type="number" id="oficioEdad" required min="18" max="80" placeholder="Tu edad">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Tipo de Oficio</label>
               <select id="oficioTipo" required>
                 <option value="">Seleccionar...</option>
@@ -304,33 +302,21 @@
               <input type="number" id="oficioExperiencia" required min="0" max="50" placeholder="Ej: 8">
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Edad</label>
-              <input type="number" id="oficioEdad" required min="18" max="80" placeholder="Tu edad">
-            </div>
-            <div class="form-group">
-              <label>Domicilio / Zona de trabajo</label>
-              <input type="text" id="oficioDomicilio" required placeholder="Barrio o zona">
-            </div>
+          <div class="form-group">
+            <label>Domicilio / Zona de trabajo</label>
+            <input type="text" id="oficioDomicilio" required placeholder="Barrio o zona">
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Localidad</label>
-              <input type="text" id="oficioLocalidad" required placeholder="Localidad">
+              <label>Provincia</label>
+              <select id="oficioProvincia" required onchange="cargarLocalidades('oficioProvincia','oficioLocalidad')">
+                <option value="">Seleccionar provincia...</option>
+              </select>
             </div>
             <div class="form-group">
-              <label>Provincia</label>
-              <select id="oficioProvincia" required>
-                <option value="">Seleccionar...</option>
-                <option value="Buenos Aires">Buenos Aires</option>
-                <option value="CABA">CABA</option>
-                <option value="Córdoba">Córdoba</option>
-                <option value="Santa Fe">Santa Fe</option>
-                <option value="Mendoza">Mendoza</option>
-                <option value="Tucumán">Tucumán</option>
-                <option value="Entre Ríos">Entre Ríos</option>
-                <option value="Salta">Salta</option>
+              <label>Localidad</label>
+              <select id="oficioLocalidad" required disabled>
+                <option value="">Primero elegí provincia</option>
               </select>
             </div>
           </div>
