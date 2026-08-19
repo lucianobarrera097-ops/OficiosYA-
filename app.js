@@ -7,6 +7,165 @@ const STORAGE_KEYS = {
   photos: 'oficiosya_photos'
 };
 
+// ===== PROVINCIAS Y LOCALIDADES (principales) =====
+const PROVINCIAS_LOCALIDADES = {
+  "Buenos Aires": [
+    "La Plata", "Mar del Plata", "Bahía Blanca", "Quilmes", "Lanús", "General San Martín",
+    "Lomas de Zamora", "La Matanza", "Almirante Brown", "Avellaneda", "San Isidro", "Tigre",
+    "Vicente López", "Morón", "San Miguel", "José C. Paz", "Malvinas Argentinas", "Pilar",
+    "Escobar", "Campana", "Zárate", "Luján", "Mercedes", "Chivilcoy", "Junín", "Pergamino",
+    "San Nicolás", "Olavarría", "Tandil", "Necochea", "Azul", "Tres Arroyos", "Balcarce",
+    "General Pueyrredón", "Berazategui", "Florencio Varela", "Esteban Echeverría", "Ezeiza",
+    "Hurlingham", "Ituzaingó", "Moreno", "Merlo", "La Costa", "Pinamar", "Villa Gesell",
+    "San Fernando", "Berisso", "Ensenada", "Brandsen", "Cañuelas", "Lobos", "Chascomús",
+    "Dolores", "General Belgrano", "Las Flores", "Rauch", "Ayacucho", "Benito Juárez",
+    "Coronel Suárez", "Coronel Pringles", "Coronel Dorrego", "Punta Alta", "Pedro Luro",
+    "Carmen de Patagones", "Viedma (límite)", "9 de Julio", "Carlos Casares", "Pehuajó",
+    "Lincoln", "General Villegas", "Trenque Lauquen", "América", "Bragado", "Chacabuco",
+    "Salto", "Rojas", "Colón", "San Antonio de Areco", "Baradero", "Ramallo", "San Pedro",
+    "Arrecifes", "Capitán Sarmiento", "Carmen de Areco", "Suipacha", "Navarro", "General Las Heras",
+    "Marcos Paz", "General Rodríguez", "Luján", "Exaltación de la Cruz", "San Andrés de Giles"
+  ],
+  "Ciudad Autónoma de Buenos Aires": [
+    "Agronomía", "Almagro", "Balvanera", "Barracas", "Belgrano", "Boedo", "Caballito",
+    "Chacarita", "Coghlan", "Colegiales", "Constitución", "Flores", "Floresta", "La Boca",
+    "La Paternal", "Liniers", "Mataderos", "Monte Castro", "Monserrat", "Nueva Pompeya",
+    "Núñez", "Palermo", "Parque Avellaneda", "Parque Chacabuco", "Parque Chas", "Parque Patricios",
+    "Puerto Madero", "Recoleta", "Retiro", "Saavedra", "San Cristóbal", "San Nicolás",
+    "San Telmo", "Vélez Sársfield", "Versalles", "Villa Crespo", "Villa del Parque",
+    "Villa Devoto", "Villa General Mitre", "Villa Lugano", "Villa Luro", "Villa Ortúzar",
+    "Villa Pueyrredón", "Villa Real", "Villa Riachuelo", "Villa Santa Rita", "Villa Soldati",
+    "Villa Urquiza"
+  ],
+  "Catamarca": [
+    "San Fernando del Valle de Catamarca", "Valle Viejo", "Fray Mamerto Esquiú", "Capayán",
+    "Santa María", "Belén", "Andalgalá", "Tinogasta", "Fiambalá", "Recreo", "Santa Rosa",
+    "Ancasti", "El Alto", "La Paz", "Paclín", "Pomán", "Mutquín", "Londres", "Hualfín"
+  ],
+  "Chaco": [
+    "Resistencia", "Barranqueras", "Fontana", "Puerto Vilelas", "Presidencia Roque Sáenz Peña",
+    "Villa Ángela", "Charata", "General San Martín", "Juan José Castelli", "Machagai",
+    "Quitilipi", "Las Breñas", "General Pinedo", "Corzuela", "Campo Largo", "Tres Isletas",
+    "Makallé", "La Leonesa", "Puerto Tirol", "Colonia Elisa", "Villa Berthet", "Santa Sylvina"
+  ],
+  "Chubut": [
+    "Rawson", "Trelew", "Puerto Madryn", "Comodoro Rivadavia", "Esquel", "Sarmiento",
+    "Gaiman", "Dolavon", "28 de Julio", "Rada Tilly", "Playa Unión", "Camarones",
+    "Trevelin", "El Hoyo", "Epuyén", "Lago Puelo", "El Maitén", "Cushamen", "Gastre",
+    "Paso de Indios", "José de San Martín", "Río Mayo", "Alto Río Senguer"
+  ],
+  "Córdoba": [
+    "Córdoba", "Villa María", "Río Cuarto", "San Francisco", "Villa Carlos Paz", "Alta Gracia",
+    "Río Tercero", "Bell Ville", "Jesús María", "La Calera", "Villa Allende", "Unquillo",
+    "Mendiolaza", "Río Segundo", "Pilar", "Oncativo", "Oliva", "Las Varillas", "Arroyito",
+    "Marcos Juárez", "Leones", "Cruz del Eje", "Deán Funes", "Villa Dolores", "Mina Clavero",
+    "Cosquín", "La Falda", "Capilla del Monte", "Villa General Belgrano", "Embalse",
+    "Santa Rosa de Calamuchita", "Laboulaye", "General Cabrera", "Adelia María", "Coronel Moldes",
+    "Huinca Renancó", "Villa Huidobro", "Morrison", "Inriville", "Monte Cristo", "Malvinas Argentinas"
+  ],
+  "Corrientes": [
+    "Corrientes", "Goya", "Mercedes", "Paso de los Libres", "Curuzú Cuatiá", "Esquina",
+    "Bella Vista", "Santo Tomé", "Monte Caseros", "Ituzaingó", "Saladas", "San Luis del Palmar",
+    "Empedrado", "Lavalle", "Mburucuyá", "San Roque", "Concepción", "Sauce", "Alvear",
+    "La Cruz", "Gobernador Virasoro", "San Martín", "Felipe Yofre"
+  ],
+  "Entre Ríos": [
+    "Paraná", "Concordia", "Gualeguaychú", "Concepción del Uruguay", "Gualeguay", "Villaguay",
+    "Colón", "Federación", "Chajarí", "La Paz", "Victoria", "Nogoyá", "Rosario del Tala",
+    "San José", "Villa Elisa", "Crespo", "Diamante", "Federal", "Basavilbaso", "Urdinarrain",
+    "Santa Elena", "Hasenkamp", "Viale", "Oro Verde", "Villa Urquiza"
+  ],
+  "Formosa": [
+    "Formosa", "Clorinda", "Pirané", "El Colorado", "Las Lomitas", "Ingeniero Juárez",
+    "Ibarreta", "Comandante Fontana", "Laguna Blanca", "General Belgrano", "Estanislao del Campo",
+    "Villa General Güemes", "Herradura", "Palo Santo", "General Lucio V. Mansilla", "Riacho He-Hé"
+  ],
+  "Jujuy": [
+    "San Salvador de Jujuy", "Palpalá", "Perico", "San Pedro de Jujuy", "Libertador General San Martín",
+    "La Quiaca", "Humahuaca", "Tilcara", "Abra Pampa", "El Carmen", "Monterrico", "Yuto",
+    "Calilegua", "Fraile Pintado", "Caimancito", "Maimará", "Purmamarca", "Susques", "Rinconada"
+  ],
+  "La Pampa": [
+    "Santa Rosa", "General Pico", "Toay", "Realicó", "General Acha", "Victorica", "Intendente Alvear",
+    "Eduardo Castex", "Macachín", "Guatraché", "Winifreda", "Anguil", "Catriló", "Quemú Quemú",
+    "Trenel", "Bernardo Larroudé", "Ingeniero Luiggi", "25 de Mayo", "La Adela", "Jacinto Aráuz"
+  ],
+  "La Rioja": [
+    "La Rioja", "Chilecito", "Aimogasta", "Chamical", "Chepes", "Villa Unión", "Nonogasta",
+    "Famatina", "Vinchina", "Villa Castelli", "Ulapes", "Olta", "Tama", "Patquía", "Anillaco",
+    "Sanagasta", "Villa San José de Vinchina", "Guandacol"
+  ],
+  "Mendoza": [
+    "Mendoza", "Godoy Cruz", "Guaymallén", "Las Heras", "Maipú", "Luján de Cuyo", "San Martín",
+    "San Rafael", "Tunuyán", "Rivadavia", "Junín", "La Paz", "Santa Rosa", "Lavalle",
+    "General Alvear", "Malargüe", "Tupungato", "San Carlos", "Cacheuta", "Potrerillos",
+    "Uspallata", "Villa Nueva", "Palmira", "Rodeo del Medio", "Russell"
+  ],
+  "Misiones": [
+    "Posadas", "Oberá", "Eldorado", "Puerto Iguazú", "Apóstoles", "Leandro N. Alem", "San Vicente",
+    "Montecarlo", "Jardín América", "Aristóbulo del Valle", "Puerto Rico", "Wanda", "Capioví",
+    "San Pedro", "El Soberbio", "Bernardo de Irigoyen", "Candelaria", "Garupá", "Gobernador Roca",
+    "San Ignacio", "Corpus", "Puerto Esperanza", "Colonia Victoria", "Dos de Mayo"
+  ],
+  "Neuquén": [
+    "Neuquén", "Cutral Có", "Plaza Huincul", "Zapala", "San Martín de los Andes", "Villa La Angostura",
+    "Centenario", "Plottier", "Senillosa", "Añelo", "Rincón de los Sauces", "Chos Malal",
+    "Junín de los Andes", "Aluminé", "Las Lajas", "Picún Leufú", "Piedra del Águila", "Villa Pehuenia",
+    "Caviahue", "El Cholar", "Andacollo", "Tricao Malal"
+  ],
+  "Río Negro": [
+    "Viedma", "San Carlos de Bariloche", "General Roca", "Cipolletti", "Allen", "Cinco Saltos",
+    "Villa Regina", "Catriel", "Choele Choel", "Luis Beltrán", "Lamarque", "Chimpay",
+    "El Bolsón", "Ingeniero Jacobacci", "Río Colorado", "Sierra Grande", "Las Grutas", "San Antonio Oeste",
+    "Valcheta", "Los Menucos", "Maquinchao", "Ñorquinco", "Dina Huapi", "Villa Mascardi"
+  ],
+  "Salta": [
+    "Salta", "San Ramón de la Nueva Orán", "Tartagal", "General Güemes", "Metán", "Rosario de la Frontera",
+    "Cafayate", "Cachi", "Joaquín V. González", "Embarcación", "Pichanal", "Profesor Salvador Mazza",
+    "Aguaray", "Campo Quijano", "Rosario de Lerma", "El Carril", "Chicoana", "La Caldera",
+    "San Antonio de los Cobres", "Iruya", "Santa Victoria", "Vaqueros", "San Lorenzo", "Coronel Moldes"
+  ],
+  "San Juan": [
+    "San Juan", "Rawson", "Rivadavia", "Santa Lucía", "Chimbas", "Pocito", "Caucete", "Albardón",
+    "Angaco", "San Martín", "9 de Julio", "25 de Mayo", "Sarmiento", "Jáchal", "Iglesia",
+    "Calingasta", "Valle Fértil", "Ullum", "Zonda", "Villa Krause", "Villa Aberastain"
+  ],
+  "San Luis": [
+    "San Luis", "Villa Mercedes", "Merlo", "La Punta", "Justo Daract", "Naschel", "Concarán",
+    "Tilisarao", "Santa Rosa del Conlara", "Quines", "San Francisco del Monte de Oro", "Buena Esperanza",
+    "Unión", "Arizona", "Villa de la Quebrada", "El Trapiche", "Potrero de los Funes", "Juana Koslay"
+  ],
+  "Santa Cruz": [
+    "Río Gallegos", "Caleta Olivia", "Pico Truncado", "Puerto Deseado", "Puerto San Julián",
+    "El Calafate", "El Chaltén", "Las Heras", "Perito Moreno", "Los Antiguos", "Gobernador Gregores",
+    "Puerto Santa Cruz", "Comandante Luis Piedra Buena", "Río Turbio", "28 de Noviembre", "Hipólito Yrigoyen"
+  ],
+  "Santa Fe": [
+    "Rosario", "Santa Fe", "Rafaela", "Venado Tuerto", "Reconquista", "Santo Tomé", "Villa Gobernador Gálvez",
+    "San Lorenzo", "Capitán Bermúdez", "Granadero Baigorria", "Pérez", "Funes", "Roldán", "Casilda",
+    "Cañada de Gómez", "Firmat", "Rufino", "Villa Constitución", "San Nicolás (límite)", "Esperanza",
+    "San Justo", "Gálvez", "Sunchales", "Ceres", "Tostado", "Vera", "Avellaneda", "Malabrigo",
+    "Arroyo Seco", "Puerto General San Martín", "Fray Luis Beltrán", "Coronda", "Sauce Viejo"
+  ],
+  "Santiago del Estero": [
+    "Santiago del Estero", "La Banda", "Termas de Río Hondo", "Añatuya", "Frías", "Fernández",
+    "Monte Quemado", "Quimilí", "Loreto", "Suncho Corral", "Clodomira", "Beltrán", "Villa Ojo de Agua",
+    "Tintina", "Campo Gallo", "Pinto", "Bandera", "Selva", "Sumampa", "Villa Atamisqui"
+  ],
+  "Tierra del Fuego, Antártida e Islas del Atlántico Sur": [
+    "Ushuaia", "Río Grande", "Tolhuin", "Puerto Almanza", "San Sebastián"
+  ],
+  "Tucumán": [
+    "San Miguel de Tucumán", "Yerba Buena", "Tafí Viejo", "Banda del Río Salí", "Alderetes",
+    "Concepción", "Aguilares", "Monteros", "Famaillá", "Lules", "Tafí del Valle", "Simoca",
+    "Bella Vista", "Juan Bautista Alberdi", "La Cocha", "Graneros", "Trancas", "Burruyacú",
+    "Lastenia", "El Manantial", "San Pablo", "Villa Mariano Moreno", "Ingenio San Pablo"
+  ]
+};
+
+// Lista ordenada de provincias para los selects
+const LISTA_PROVINCIAS = Object.keys(PROVINCIAS_LOCALIDADES).sort((a, b) => a.localeCompare(b, 'es'));
+
 // Datos de ejemplo de profesionales
 const DEMO_PROFESIONALES = [
   {
@@ -16,12 +175,13 @@ const DEMO_PROFESIONALES = [
     email: 'carlos.plomero@demo.com',
     password: 'demo123',
     telefono: '11 4567-8901',
+    dni: '28456789',
     oficio: 'Plomería',
     experiencia: 12,
     edad: 38,
     domicilio: 'Villa Crespo',
     localidad: 'Villa Crespo',
-    provincia: 'CABA',
+    provincia: 'Ciudad Autónoma de Buenos Aires',
     descripcion: 'Plomero matriculado con más de 12 años de experiencia. Especialista en reparaciones de urgencia, instalaciones de baño y cocina.',
     fotos: [
       'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&h=300&fit=crop',
@@ -35,12 +195,13 @@ const DEMO_PROFESIONALES = [
     email: 'martin.gasista@demo.com',
     password: 'demo123',
     telefono: '11 2345-6789',
+    dni: '31234567',
     oficio: 'Gasista',
     experiencia: 8,
     edad: 32,
     domicilio: 'Caballito',
     localidad: 'Caballito',
-    provincia: 'CABA',
+    provincia: 'Ciudad Autónoma de Buenos Aires',
     descripcion: 'Gasista matriculado. Instalaciones de gas natural, termotanques y calefactores. Certificaciones al día.',
     fotos: [
       'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=300&h=300&fit=crop'
@@ -53,12 +214,13 @@ const DEMO_PROFESIONALES = [
     email: 'roberto.elec@demo.com',
     password: 'demo123',
     telefono: '11 3456-7890',
+    dni: '25678901',
     oficio: 'Electricista',
     experiencia: 15,
     edad: 45,
     domicilio: 'Flores',
     localidad: 'Flores',
-    provincia: 'CABA',
+    provincia: 'Ciudad Autónoma de Buenos Aires',
     descripcion: 'Electricista con 15 años de trayectoria. Instalaciones residenciales y comerciales, tableros y automatización.',
     fotos: [
       'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=300&h=300&fit=crop',
@@ -72,12 +234,13 @@ const DEMO_PROFESIONALES = [
     email: 'diego.pintor@demo.com',
     password: 'demo123',
     telefono: '11 5678-9012',
+    dni: '29876543',
     oficio: 'Pintor',
     experiencia: 10,
     edad: 35,
     domicilio: 'Palermo',
     localidad: 'Palermo',
-    provincia: 'CABA',
+    provincia: 'Ciudad Autónoma de Buenos Aires',
     descripcion: 'Pintor profesional. Especializado en pintura interior, exterior y trabajos decorativos. Acabados de calidad.',
     fotos: [
       'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=300&h=300&fit=crop'
@@ -90,11 +253,12 @@ const DEMO_PROFESIONALES = [
     email: 'jorge.albanil@demo.com',
     password: 'demo123',
     telefono: '351 123-4567',
+    dni: '22345678',
     oficio: 'Albañil',
     experiencia: 20,
     edad: 48,
     domicilio: 'Nueva Córdoba',
-    localidad: 'Córdoba Capital',
+    localidad: 'Córdoba',
     provincia: 'Córdoba',
     descripcion: 'Albañil con dos décadas de experiencia. Reformas, ampliaciones, revoques y colocación de pisos.',
     fotos: [
@@ -108,6 +272,7 @@ const DEMO_PROFESIONALES = [
     email: 'luis.carpintero@demo.com',
     password: 'demo123',
     telefono: '341 987-6543',
+    dni: '26789012',
     oficio: 'Carpintero',
     experiencia: 14,
     edad: 41,
@@ -126,6 +291,7 @@ const DEMO_PROFESIONALES = [
     email: 'pablo.plomero@demo.com',
     password: 'demo123',
     telefono: '11 6789-0123',
+    dni: '34567890',
     oficio: 'Plomería',
     experiencia: 6,
     edad: 29,
@@ -142,6 +308,7 @@ const DEMO_PROFESIONALES = [
     email: 'andres.elec@demo.com',
     password: 'demo123',
     telefono: '261 555-1234',
+    dni: '30123456',
     oficio: 'Electricista',
     experiencia: 9,
     edad: 34,
@@ -221,6 +388,16 @@ function init() {
   if (users.length === 0) {
     users = [...DEMO_PROFESIONALES];
     saveUsers(users);
+  } else {
+    // Migrar posibles "CABA" antiguos a nombre completo
+    let changed = false;
+    users.forEach(u => {
+      if (u.provincia === 'CABA') {
+        u.provincia = 'Ciudad Autónoma de Buenos Aires';
+        changed = true;
+      }
+    });
+    if (changed) saveUsers(users);
   }
 
   let reviews = getReviews();
@@ -229,10 +406,100 @@ function init() {
     saveReviews(reviews);
   }
 
+  // Si los selects de provincia ya tienen opciones en el HTML, no los pisamos
+  poblarSelectsProvincias();
+  // Listeners de respaldo por si el onchange del HTML no dispara
+  [
+    ['filterProvincia', 'filterLocalidad'],
+    ['clienteProvincia', 'clienteLocalidad'],
+    ['oficioProvincia', 'oficioLocalidad']
+  ].forEach(([provId, locId]) => {
+    const el = document.getElementById(provId);
+    if (el) {
+      el.addEventListener('change', () => cargarLocalidades(provId, locId));
+    }
+  });
   updateNav();
   showSection('home');
   setupRatingStars();
 }
+
+// ===== PROVINCIAS / LOCALIDADES DINÁMICAS =====
+function poblarSelectsProvincias() {
+  const ids = ['filterProvincia', 'clienteProvincia', 'oficioProvincia'];
+  ids.forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    // Si ya hay más de 1 opción (las del HTML), no reemplazar
+    if (sel.options.length > 1) return;
+    const first = sel.options[0] ? sel.options[0].outerHTML : '<option value="">Seleccionar...</option>';
+    sel.innerHTML = first;
+    LISTA_PROVINCIAS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function cargarLocalidades(provinciaSelectId, localidadSelectId, selectedLocalidad) {
+  const provSel = document.getElementById(provinciaSelectId);
+  const locSel = document.getElementById(localidadSelectId);
+  if (!provSel || !locSel) return;
+
+  const provincia = (provSel.value || '').trim();
+  locSel.innerHTML = '';
+
+  if (!provincia) {
+    locSel.setAttribute('disabled', 'disabled');
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Primero elegí provincia';
+    locSel.appendChild(opt);
+    return;
+  }
+
+  // Buscar localidades (coincidencia exacta o por si hay variación de nombre)
+  let localidades = PROVINCIAS_LOCALIDADES[provincia];
+  if (!localidades) {
+    const key = Object.keys(PROVINCIAS_LOCALIDADES).find(
+      k => k.toLowerCase() === provincia.toLowerCase()
+    );
+    localidades = key ? PROVINCIAS_LOCALIDADES[key] : [];
+  }
+  if (!localidades) localidades = [];
+
+  locSel.removeAttribute('disabled');
+  locSel.disabled = false;
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = localidades.length
+    ? 'Seleccionar localidad...'
+    : 'Sin localidades cargadas';
+  locSel.appendChild(placeholder);
+
+  localidades.forEach(loc => {
+    const opt = document.createElement('option');
+    opt.value = loc;
+    opt.textContent = loc;
+    if (selectedLocalidad && selectedLocalidad === loc) opt.selected = true;
+    locSel.appendChild(opt);
+  });
+
+  // Si la localidad guardada no está en la lista, la agregamos
+  if (selectedLocalidad && !localidades.includes(selectedLocalidad)) {
+    const opt = document.createElement('option');
+    opt.value = selectedLocalidad;
+    opt.textContent = selectedLocalidad + ' (actual)';
+    opt.selected = true;
+    locSel.appendChild(opt);
+  }
+}
+
+// Exponer en window por si se llama desde HTML
+window.cargarLocalidades = cargarLocalidades;
 
 // ===== STORAGE HELPERS =====
 function getUsers() {
@@ -388,7 +655,7 @@ function registrarCliente(e) {
     email: email,
     password: document.getElementById('clientePass').value,
     telefono: document.getElementById('clienteTelefono').value.trim(),
-    localidad: document.getElementById('clienteLocalidad').value.trim(),
+    localidad: document.getElementById('clienteLocalidad').value,
     provincia: document.getElementById('clienteProvincia').value
   };
   
@@ -413,6 +680,16 @@ function registrarOficio(e) {
     showToast('Ya existe una cuenta con ese email', 'error');
     return;
   }
+
+  const dni = document.getElementById('oficioDni').value.trim().replace(/\D/g, '');
+  if (dni.length < 7 || dni.length > 8) {
+    showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
+    return;
+  }
+  if (users.find(u => u.dni === dni)) {
+    showToast('Ya existe un profesional registrado con ese DNI', 'error');
+    return;
+  }
   
   const nuevo = {
     id: 'u_' + Date.now(),
@@ -421,11 +698,12 @@ function registrarOficio(e) {
     email: email,
     password: document.getElementById('oficioPass').value,
     telefono: document.getElementById('oficioTelefono').value.trim(),
+    dni: dni,
     oficio: document.getElementById('oficioTipo').value,
     experiencia: parseInt(document.getElementById('oficioExperiencia').value),
     edad: parseInt(document.getElementById('oficioEdad').value),
     domicilio: document.getElementById('oficioDomicilio').value.trim(),
-    localidad: document.getElementById('oficioLocalidad').value.trim(),
+    localidad: document.getElementById('oficioLocalidad').value,
     provincia: document.getElementById('oficioProvincia').value,
     descripcion: document.getElementById('oficioDescripcion').value.trim(),
     fotos: []
@@ -480,14 +758,14 @@ function logout() {
 function quickSearch(oficio) {
   showSection('search');
   document.getElementById('filterOficio').value = oficio;
-  document.getElementById('filterLocalidad').value = '';
   document.getElementById('filterProvincia').value = '';
+  cargarLocalidades('filterProvincia', 'filterLocalidad');
   realizarBusqueda();
 }
 
 function realizarBusqueda() {
   const oficio = document.getElementById('filterOficio').value;
-  const localidad = document.getElementById('filterLocalidad').value.trim().toLowerCase();
+  const localidad = document.getElementById('filterLocalidad').value;
   const provincia = document.getElementById('filterProvincia').value;
   
   const users = getUsers().filter(u => u.tipo === 'oficio');
@@ -495,7 +773,7 @@ function realizarBusqueda() {
   let resultados = users.filter(u => {
     if (oficio && u.oficio !== oficio) return false;
     if (provincia && u.provincia !== provincia) return false;
-    if (localidad && !u.localidad.toLowerCase().includes(localidad) && !u.domicilio.toLowerCase().includes(localidad)) return false;
+    if (localidad && u.localidad !== localidad && !u.domicilio.toLowerCase().includes(localidad.toLowerCase())) return false;
     return true;
   });
   
@@ -789,8 +1067,18 @@ function showMyProfile() {
             <input type="text" id="editNombre" value="${prof.nombre}" required>
           </div>
           <div class="form-group">
+            <label>DNI</label>
+            <input type="text" id="editDni" value="${prof.dni || ''}" required pattern="[0-9]{7,8}" maxlength="8" title="DNI sin puntos (7 u 8 dígitos)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
             <label>Teléfono</label>
             <input type="tel" id="editTelefono" value="${prof.telefono}" required>
+          </div>
+          <div class="form-group">
+            <label>Edad</label>
+            <input type="number" id="editEdad" value="${prof.edad}" min="18" max="80" required>
           </div>
         </div>
         <div class="form-row">
@@ -809,25 +1097,24 @@ function showMyProfile() {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Edad</label>
-            <input type="number" id="editEdad" value="${prof.edad}" min="18" max="80" required>
-          </div>
-          <div class="form-group">
             <label>Domicilio / Zona</label>
             <input type="text" id="editDomicilio" value="${prof.domicilio}" required>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Localidad</label>
-            <input type="text" id="editLocalidad" value="${prof.localidad}" required>
-          </div>
-          <div class="form-group">
             <label>Provincia</label>
-            <select id="editProvincia" required>
-              ${['Buenos Aires','CABA','Córdoba','Santa Fe','Mendoza','Tucumán','Entre Ríos','Salta'].map(p => 
+            <select id="editProvincia" required onchange="cargarLocalidades('editProvincia','editLocalidad')">
+              <option value="">Seleccionar provincia...</option>
+              ${LISTA_PROVINCIAS.map(p => 
                 `<option value="${p}" ${p === prof.provincia ? 'selected' : ''}>${p}</option>`
               ).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Localidad</label>
+            <select id="editLocalidad" required>
+              <option value="">Seleccionar localidad...</option>
             </select>
           </div>
         </div>
@@ -851,6 +1138,8 @@ function showMyProfile() {
   `;
   
   document.getElementById('myProfileContent').innerHTML = content;
+  // Cargar localidades de la provincia actual y preseleccionar
+  cargarLocalidades('editProvincia', 'editLocalidad', prof.localidad);
   showSection('myProfile');
 }
 
@@ -863,13 +1152,25 @@ function actualizarPerfil(e) {
   const idx = users.findIndex(u => u.id === user.id);
   if (idx === -1) return;
   
+  const dni = document.getElementById('editDni').value.trim().replace(/\D/g, '');
+  if (dni.length < 7 || dni.length > 8) {
+    showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
+    return;
+  }
+  // Evitar DNI duplicado de otro usuario
+  if (users.find(u => u.dni === dni && u.id !== user.id)) {
+    showToast('Ya existe otro profesional con ese DNI', 'error');
+    return;
+  }
+
   users[idx].nombre = document.getElementById('editNombre').value.trim();
+  users[idx].dni = dni;
   users[idx].telefono = document.getElementById('editTelefono').value.trim();
   users[idx].oficio = document.getElementById('editOficio').value;
   users[idx].experiencia = parseInt(document.getElementById('editExperiencia').value);
   users[idx].edad = parseInt(document.getElementById('editEdad').value);
   users[idx].domicilio = document.getElementById('editDomicilio').value.trim();
-  users[idx].localidad = document.getElementById('editLocalidad').value.trim();
+  users[idx].localidad = document.getElementById('editLocalidad').value;
   users[idx].provincia = document.getElementById('editProvincia').value;
   users[idx].descripcion = document.getElementById('editDescripcion').value.trim();
   
