@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oficios YA! - Encuentra profesionales de confianza</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="#" class="logo" onclick="showSection('home')">
+        <i class="fas fa-tools"></i> Oficios <span>YA!</span>
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#" onclick="showSection('home')">Inicio</a></li>
+        <li><a href="#" onclick="showSection('search')">Buscar Oficios</a></li>
+        <li id="navRegister"><a href="#" onclick="showSection('register')">Registrarse</a></li>
+        <li id="navLogin"><a href="#" onclick="showSection('login')">Iniciar Sesión</a></li>
+        <li id="navProfile" style="display:none;"><a href="#" onclick="showMyProfile()">Mi Perfil</a></li>
+        <li id="navNotifications" style="display:none;">
+          <a href="#" onclick="showNotifications()" class="notif-btn">
+            <i class="fas fa-bell"></i>
+            <span class="badge" id="notifBadge" style="display:none;">0</span>
+          </a>
+        </li>
+        <li id="navLogout" style="display:none;"><a href="#" onclick="logout()">Cerrar Sesión</a></li>
+      </ul>
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HOME SECTION -->
+  <section id="home" class="section active">
+    <header class="hero">
+      <div class="hero-content">
+        <h1>Encuentra profesionales de confianza <span>cerca de ti</span></h1>
+        <p>Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
+        <div class="hero-buttons">
+          <button class="btn btn-primary" onclick="showSection('search')">Buscar ahora</button>
+          <button class="btn btn-outline" onclick="showSection('register')">Registrarme</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Bienvenida -->
+      <div class="welcome-card">
+        <div class="welcome-text">
+          <h2><i class="fas fa-handshake"></i> ¡Bienvenido a Oficios YA!</h2>
+          <p>
+            Somos la plataforma que conecta a vecinos con profesionales de oficios de forma sencilla y confiable. 
+            Ya no más perder tiempo buscando recomendaciones o números de teléfono. 
+            Aquí encontrás plomeros, gasistas, electricistas, pintores, albañiles y muchos más, 
+            con perfiles verificados, fotos de trabajos reales y reseñas de otros clientes.
+          </p>
+          <div class="benefits">
+            <div class="benefit">
+              <i class="fas fa-star"></i>
+              <span>Reseñas y valoraciones reales</span>
+            </div>
+            <div class="benefit">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>Buscá por localidad y provincia</span>
+            </div>
+            <div class="benefit">
+              <i class="fas fa-camera"></i>
+              <span>Fotos de trabajos realizados</span>
+            </div>
+            <div class="benefit">
+              <i class="fas fa-bell"></i>
+              <span>Notificaciones al instante</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Oficios destacados -->
+      <h2 class="section-title">Oficios más buscados</h2>
+      <div class="oficios-grid">
+        <div class="oficio-card" onclick="quickSearch('Plomería')">
+          <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&h=250&fit=crop" alt="Plomería">
+          <div class="oficio-info">
+            <h3><i class="fas fa-faucet"></i> Plomería</h3>
+            <p>Reparaciones, instalaciones y urgencias</p>
+          </div>
+        </div>
+        <div class="oficio-card" onclick="quickSearch('Gasista')">
+          <img src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=400&h=250&fit=crop" alt="Gasista">
+          <div class="oficio-info">
+            <h3><i class="fas fa-fire"></i> Gasista</h3>
+            <p>Instalaciones y certificaciones de gas</p>
+          </div>
+        </div>
+        <div class="oficio-card" onclick="quickSearch('Electricista')">
+          <img src="https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=400&h=250&fit=crop" alt="Electricista">
+          <div class="oficio-info">
+            <h3><i class="fas fa-bolt"></i> Electricista</h3>
+            <p>Instalaciones eléctricas y reparaciones</p>
+          </div>
+        </div>
+        <div class="oficio-card" onclick="quickSearch('Pintor')">
+          <img src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&h=250&fit=crop" alt="Pintor">
+          <div class="oficio-info">
+            <h3><i class="fas fa-paint-roller"></i> Pintor</h3>
+            <p>Pintura interior, exterior y decorativa</p>
+          </div>
+        </div>
+        <div class="oficio-card" onclick="quickSearch('Albañil')">
+          <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=250&fit=crop" alt="Albañil">
+          <div class="oficio-info">
+            <h3><i class="fas fa-hard-hat"></i> Albañil</h3>
+            <p>Construcción, reformas y reparaciones</p>
+          </div>
+        </div>
+        <div class="oficio-card" onclick="quickSearch('Carpintero')">
+          <img src="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&h=250&fit=crop" alt="Carpintero">
+          <div class="oficio-info">
+            <h3><i class="fas fa-hammer"></i> Carpintero</h3>
+            <p>Muebles, puertas y trabajos en madera</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cómo funciona -->
+      <h2 class="section-title">¿Cómo funciona?</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Buscá</h3>
+          <p>Filtrá por oficio, localidad y provincia. Encontrá profesionales cerca de tu casa.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Elegí</h3>
+          <p>Mirá perfiles, fotos de trabajos anteriores y reseñas de otros clientes.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Contactá</h3>
+          <p>Comunicate directamente y coordiná el trabajo. Luego dejá tu valoración.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEARCH SECTION -->
+  <section id="search" class="section">
+    <div class="container">
+      <h2 class="section-title">Buscar profesionales</h2>
+      
+      <div class="search-box">
+        <div class="search-filters">
+          <div class="filter-group">
+            <label><i class="fas fa-briefcase"></i> Oficio</label>
+            <select id="filterOficio">
+              <option value="">Todos los oficios</option>
+              <option value="Plomería">Plomería</option>
+              <option value="Gasista">Gasista</option>
+              <option value="Electricista">Electricista</option>
+              <option value="Pintor">Pintor</option>
+              <option value="Albañil">Albañil</option>
+              <option value="Carpintero">Carpintero</option>
+              <option value="Jardinero">Jardinero</option>
+              <option value="Cerrajero">Cerrajero</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-map-marker-alt"></i> Localidad</label>
+            <input type="text" id="filterLocalidad" placeholder="Ej: Palermo, Centro...">
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-map"></i> Provincia</label>
+            <select id="filterProvincia">
+              <option value="">Todas las provincias</option>
+              <option value="Buenos Aires">Buenos Aires</option>
+              <option value="CABA">CABA</option>
+              <option value="Córdoba">Córdoba</option>
+              <option value="Santa Fe">Santa Fe</option>
+              <option value="Mendoza">Mendoza</option>
+              <option value="Tucumán">Tucumán</option>
+              <option value="Entre Ríos">Entre Ríos</option>
+              <option value="Salta">Salta</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="realizarBusqueda()">
+            <i class="fas fa-search"></i> Buscar
+          </button>
+        </div>
+      </div>
+
+      <div id="resultados" class="resultados-grid">
+        <!-- Resultados dinámicos -->
+      </div>
+      <div id="noResultados" class="no-results" style="display:none;">
+        <i class="fas fa-search"></i>
+        <p>No se encontraron profesionales con esos filtros.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- REGISTER SECTION -->
+  <section id="register" class="section">
+    <div class="container">
+      <h2 class="section-title">Crear cuenta</h2>
+      
+      <div class="register-tabs">
+        <button class="tab-btn active" onclick="switchRegisterTab('cliente')">Soy Cliente</button>
+        <button class="tab-btn" onclick="switchRegisterTab('oficio')">Soy Persona de Oficio</button>
+      </div>
+
+      <!-- Formulario Cliente -->
+      <div id="formCliente" class="register-form active">
+        <form onsubmit="registrarCliente(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nombre completo</label>
+              <input type="text" id="clienteNombre" required placeholder="Tu nombre">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="clienteEmail" required placeholder="tu@email.com">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Contraseña</label>
+              <input type="password" id="clientePass" required minlength="6" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="form-group">
+              <label>Teléfono</label>
+              <input type="tel" id="clienteTelefono" required placeholder="11 1234-5678">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Localidad</label>
+              <input type="text" id="clienteLocalidad" required placeholder="Tu localidad">
+            </div>
+            <div class="form-group">
+              <label>Provincia</label>
+              <select id="clienteProvincia" required>
+                <option value="">Seleccionar...</option>
+                <option value="Buenos Aires">Buenos Aires</option>
+                <option value="CABA">CABA</option>
+                <option value="Córdoba">Córdoba</option>
+                <option value="Santa Fe">Santa Fe</option>
+                <option value="Mendoza">Mendoza</option>
+                <option value="Tucumán">Tucumán</option>
+                <option value="Entre Ríos">Entre Ríos</option>
+                <option value="Salta">Salta</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Registrarme como Cliente</button>
+        </form>
+      </div>
+
+      <!-- Formulario Oficio -->
+      <div id="formOficio" class="register-form">
+        <form onsubmit="registrarOficio(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nombre completo</label>
+              <input type="text" id="oficioNombre" required placeholder="Tu nombre">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="oficioEmail" required placeholder="tu@email.com">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Contraseña</label>
+              <input type="password" id="oficioPass" required minlength="6" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="form-group">
+              <label>Teléfono / Contacto</label>
+              <input type="tel" id="oficioTelefono" required placeholder="11 1234-5678">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tipo de Oficio</label>
+              <select id="oficioTipo" required>
+                <option value="">Seleccionar...</option>
+                <option value="Plomería">Plomería</option>
+                <option value="Gasista">Gasista</option>
+                <option value="Electricista">Electricista</option>
+                <option value="Pintor">Pintor</option>
+                <option value="Albañil">Albañil</option>
+                <option value="Carpintero">Carpintero</option>
+                <option value="Jardinero">Jardinero</option>
+                <option value="Cerrajero">Cerrajero</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Años de experiencia</label>
+              <input type="number" id="oficioExperiencia" required min="0" max="50" placeholder="Ej: 8">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Edad</label>
+              <input type="number" id="oficioEdad" required min="18" max="80" placeholder="Tu edad">
+            </div>
+            <div class="form-group">
+              <label>Domicilio / Zona de trabajo</label>
+              <input type="text" id="oficioDomicilio" required placeholder="Barrio o zona">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Localidad</label>
+              <input type="text" id="oficioLocalidad" required placeholder="Localidad">
+            </div>
+            <div class="form-group">
+              <label>Provincia</label>
+              <select id="oficioProvincia" required>
+                <option value="">Seleccionar...</option>
+                <option value="Buenos Aires">Buenos Aires</option>
+                <option value="CABA">CABA</option>
+                <option value="Córdoba">Córdoba</option>
+                <option value="Santa Fe">Santa Fe</option>
+                <option value="Mendoza">Mendoza</option>
+                <option value="Tucumán">Tucumán</option>
+                <option value="Entre Ríos">Entre Ríos</option>
+                <option value="Salta">Salta</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Descripción breve (opcional)</label>
+            <textarea id="oficioDescripcion" rows="3" placeholder="Contá un poco sobre tu experiencia y servicios..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Registrarme como Profesional</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGIN SECTION -->
+  <section id="login" class="section">
+    <div class="container">
+      <div class="login-card">
+        <h2><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</h2>
+        <form onsubmit="iniciarSesion(event)">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="loginEmail" required placeholder="tu@email.com">
+          </div>
+          <div class="form-group">
+            <label>Contraseña</label>
+            <input type="password" id="loginPass" required placeholder="Tu contraseña">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+        </form>
+        <p class="login-footer">¿No tenés cuenta? <a href="#" onclick="showSection('register')">Registrate acá</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROFILE SECTION (para ver perfil de profesional) -->
+  <section id="profile" class="section">
+    <div class="container">
+      <div id="profileContent">
+        <!-- Contenido dinámico del perfil -->
+      </div>
+    </div>
+  </section>
+
+  <!-- MY PROFILE SECTION (edición para el profesional logueado) -->
+  <section id="myProfile" class="section">
+    <div class="container">
+      <div id="myProfileContent">
+        <!-- Contenido dinámico -->
+      </div>
+    </div>
+  </section>
+
+  <!-- NOTIFICATIONS SECTION -->
+  <section id="notifications" class="section">
+    <div class="container">
+      <h2 class="section-title"><i class="fas fa-bell"></i> Notificaciones</h2>
+      <div id="notificationsList" class="notifications-list">
+        <!-- Notificaciones dinámicas -->
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <h3><i class="fas fa-tools"></i> Oficios YA!</h3>
+          <p>Conectando vecinos con profesionales de confianza desde 2024.</p>
+        </div>
+        <div class="footer-links">
+          <h4>Enlaces</h4>
+          <a href="#" onclick="showSection('home')">Inicio</a>
+          <a href="#" onclick="showSection('search')">Buscar</a>
+          <a href="#" onclick="showSection('register')">Registrarse</a>
+        </div>
+        <div class="footer-contact">
+          <h4>Contacto</h4>
+          <p><i class="fas fa-envelope"></i> hola@oficiosya.com</p>
+          <p><i class="fas fa-phone"></i> 0800-OFICIOS</p>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Oficios YA! - Todos los derechos reservados</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal para reseña -->
+  <div id="reviewModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="cerrarModal()">&times;</span>
+      <h3>Dejar reseña y valoración</h3>
+      <form onsubmit="enviarResena(event)">
+        <input type="hidden" id="reviewProfId">
+        <div class="form-group">
+          <label>Calidad del trabajo (1-5)</label>
+          <div class="rating-input" id="ratingCalidad">
+            <i class="far fa-star" data-value="1"></i>
+            <i class="far fa-star" data-value="2"></i>
+            <i class="far fa-star" data-value="3"></i>
+            <i class="far fa-star" data-value="4"></i>
+            <i class="far fa-star" data-value="5"></i>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tiempo de respuesta (1-5)</label>
+          <div class="rating-input" id="ratingTiempo">
+            <i class="far fa-star" data-value="1"></i>
+            <i class="far fa-star" data-value="2"></i>
+            <i class="far fa-star" data-value="3"></i>
+            <i class="far fa-star" data-value="4"></i>
+            <i class="far fa-star" data-value="5"></i>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Precio / Relación calidad-precio (1-5)</label>
+          <div class="rating-input" id="ratingPrecio">
+            <i class="far fa-star" data-value="1"></i>
+            <i class="far fa-star" data-value="2"></i>
+            <i class="far fa-star" data-value="3"></i>
+            <i class="far fa-star" data-value="4"></i>
+            <i class="far fa-star" data-value="5"></i>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Comentario</label>
+          <textarea id="reviewComentario" rows="4" required placeholder="Contá tu experiencia..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Enviar reseña</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
