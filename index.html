@@ -408,6 +408,20 @@
             <label>Domicilio / Zona de trabajo</label>
             <input type="text" id="oficioDomicilio" required placeholder="Barrio o zona">
           </div>
+          <div class="form-group">
+            <label>Foto de perfil <span style="color:#c1121f;">*</span></label>
+            <p style="font-size:0.8rem;color:var(--text-light);margin-bottom:0.5rem;">Obligatoria. Se verá en tu perfil y en las búsquedas.</p>
+            <div class="reg-photo-wrap">
+              <div class="reg-photo-preview" id="oficioFotoPreview">
+                <i class="fas fa-user-circle"></i>
+                <span>Sin foto</span>
+              </div>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                <i class="fas fa-camera"></i> Elegir foto
+                <input type="file" id="oficioFotoPerfil" accept="image/*" required hidden onchange="previewFotoRegistro(event)">
+              </label>
+            </div>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label>Provincia</label>
@@ -495,48 +509,59 @@
     </div>
   </section>
 
-  <!-- EDIT ACCOUNT (cliente o acceso rápido a datos) -->
+  <!-- EDIT ACCOUNT (cliente) -->
   <section id="editAccount" class="section">
     <div class="container">
-      <h2 class="section-title"><i class="fas fa-user-edit"></i> Editar mi perfil</h2>
-      <div class="login-card" style="max-width:560px;">
-        <form id="editAccountForm" onsubmit="guardarCuenta(event)">
-          <div class="form-group">
-            <label>Nombre completo</label>
-            <input type="text" id="accNombre" required>
+      <div class="client-profile-shell">
+        <div class="client-profile-banner">
+          <div class="client-profile-avatar" id="clientProfileAvatar">CL</div>
+          <div>
+            <h2 id="clientProfileTitle">Mi cuenta</h2>
+            <p class="client-profile-role"><i class="fas fa-user"></i> Cliente · Oficios YA!</p>
           </div>
-          <div class="form-group">
-            <label>Email</label>
-            <input type="email" id="accEmail" disabled title="El email no se puede cambiar">
-          </div>
-          <div class="form-group">
-            <label>Teléfono</label>
-            <input type="tel" id="accTelefono" required>
-          </div>
-          <div id="accClienteFields">
+        </div>
+        <div class="client-profile-body">
+          <h3 class="client-section-title"><i class="fas fa-user-edit"></i> Datos personales</h3>
+          <form id="editAccountForm" onsubmit="guardarCuenta(event)">
             <div class="form-row">
               <div class="form-group">
-                <label>Provincia</label>
-                <select id="accProvincia" onchange="cargarLocalidades('accProvincia','accLocalidad')">
-                  <option value="">Seleccionar provincia...</option>
-                </select>
+                <label>Nombre completo</label>
+                <input type="text" id="accNombre" required>
               </div>
               <div class="form-group">
-                <label>Localidad</label>
-                <select id="accLocalidad">
-                  <option value="">Seleccionar...</option>
-                </select>
+                <label>Email</label>
+                <input type="email" id="accEmail" disabled title="El email no se puede cambiar">
               </div>
             </div>
-          </div>
-          <div id="accOficioHint" style="display:none;margin-bottom:1rem;">
-            <p style="color:var(--text-light);font-size:0.9rem;">
-              Para editar oficio, experiencia, fotos y más, usá
-              <a href="#" onclick="showMyProfile(); return false;" style="color:var(--primary);font-weight:600;">Mi perfil profesional</a>.
-            </p>
-          </div>
-          <button type="submit" class="btn btn-primary btn-block">Guardar cambios</button>
-        </form>
+            <div class="form-group">
+              <label>Teléfono</label>
+              <input type="tel" id="accTelefono" required>
+            </div>
+            <div id="accClienteFields">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Provincia</label>
+                  <select id="accProvincia" onchange="cargarLocalidades('accProvincia','accLocalidad')">
+                    <option value="">Seleccionar provincia...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Localidad</label>
+                  <select id="accLocalidad">
+                    <option value="">Seleccionar...</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div id="accOficioHint" style="display:none;margin-bottom:1rem;">
+              <p style="color:var(--text-light);font-size:0.9rem;">
+                Para editar oficio, experiencia, fotos y más, usá
+                <a href="#" onclick="showMyProfile(); return false;" style="color:var(--primary);font-weight:600;">Mi perfil profesional</a>.
+              </p>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Guardar cambios</button>
+          </form>
+        </div>
       </div>
     </div>
   </section>
