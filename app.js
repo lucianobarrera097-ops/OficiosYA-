@@ -1094,33 +1094,23 @@ async function registrarOficio(e) {
 /** Envía el mail de verificación con reintentos y mensajes claros */
 async function enviarEmailVerificacion(user) {
   if (!user) throw new Error('No hay usuario para verificar');
-  const continueUrl = window.location.href.split('?')[0].split('#')[0];
-  // 1) Intento con URL de retorno (debe estar en dominios autorizados de Firebase)
   try {
-    await user.sendEmailVerification({
-      url: continueUrl,
-      handleCodeInApp: false
-    });
-    console.log('Email de verificación enviado (con continueUrl)');
-    return true;
-  } catch (err1) {
-    console.warn('Falló envío con continueUrl, reintento simple:', err1.code, err1.message);
-  }
-  // 2) Sin actionCodeSettings (a veces funciona cuando el dominio no está autorizado)
-  try {
+    // Sin URL de retorno: evita auth/unauthorized-continue-uri si el dominio
+    // (GitHub Pages, etc.) aún no está en Authorized domains.
+    // La app detecta la verificación por polling mientras la sesión sigue abierta.
     await user.sendEmailVerification();
-    console.log('Email de verificación enviado (simple)');
+    console.log('Email de verificación enviado');
     return true;
-  } catch (err2) {
-    console.error('Error definitivo al enviar verificación:', err2.code, err2.message);
-    const code = err2.code || '';
+  } catch (err) {
+    console.error('Error al enviar verificación:', err.code, err.message);
+    const code = err.code || '';
     if (code === 'auth/too-many-requests') {
-      throw new Error('Demasiados intentos. Esperá unos minutos y reenviá el correo.');
+      throw new Error('Firebase bloqueó los envíos por muchos intentos. Esperá 15–30 minutos y usá “Reenviar correo”.');
     }
     if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
-      throw new Error('El dominio de la app no está autorizado en Firebase (Authentication → Settings → Authorized domains).');
+      throw new Error('Dominio no autorizado en Firebase. Authentication → Settings → Authorized domains.');
     }
-    throw new Error(err2.message || 'No se pudo enviar el email de verificación');
+    throw new Error(err.message || 'No se pudo enviar el email de verificación');
   }
 }
 
@@ -2405,4 +2395,63 @@ window.quitarQuoteFoto = quitarQuoteFoto;
 window.enviarPresupuesto = enviarPresupuesto;
 
 // ===== START =====
+
+// ===== PWA: INSTALAR APP =====
+let deferredInstallPrompt = null;
+
+function mostrarBotonesInstalar(show) {
+  const nav = document.getElementById('navInstall');
+  const hero = document.getElementById('btnInstallHero');
+  const displayNav = show ? 'block' : 'none';
+  const displayHero = show ? 'inline-flex' : 'none';
+  if (nav) nav.style.display = displayNav;
+  if (hero) hero.style.display = displayHero;
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  mostrarBotonesInstalar(true);
+  console.log('PWA: prompt de instalación disponible');
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  mostrarBotonesInstalar(false);
+  showToast('¡App instalada correctamente!');
+});
+
+async function instalarApp() {
+  // Ya instalada / modo standalone
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    showToast('La app ya está instalada');
+    mostrarBotonesInstalar(false);
+    return;
+  }
+
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    console.log('PWA install:', outcome);
+    if (outcome === 'accepted') {
+      showToast('Instalando Oficios YA!...');
+    }
+    deferredInstallPrompt = null;
+    mostrarBotonesInstalar(false);
+    return;
+  }
+
+  // iOS / navegadores sin beforeinstallprompt
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    showToast('En iPhone: Compartir → “Agregar a pantalla de inicio”');
+    return;
+  }
+  showToast('Usá el menú del navegador: “Instalar aplicación” o “Agregar a la pantalla de inicio”');
+}
+
+window.instalarApp = instalarApp;
+
+
 document.addEventListener('DOMContentLoaded', init);
