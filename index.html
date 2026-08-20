@@ -3,7 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Oficios YA! — Encontrá profesionales de confianza cerca de vos.">
+  <meta name="theme-color" content="#e85d04">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Oficios YA!">
   <title>Oficios YA! - Encuentra profesionales de confianza</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -778,6 +787,12 @@
       if (typeof cargarLocalidades !== 'function') {
         console.error('Oficios YA: no se pudo cargar app.js.');
         alert('No se pudo cargar app.js.\n\nAsegurate de tener en la misma carpeta:\n- index.html\n- styles.css\n- app.js\n- firebase-config.js\n- logo.jpg');
+      }
+      // Registrar Service Worker (PWA)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+          .then(function (reg) { console.log('PWA: Service Worker registrado', reg.scope); })
+          .catch(function (err) { console.warn('PWA: no se pudo registrar el SW', err); });
       }
     });
   </script>
