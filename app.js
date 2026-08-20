@@ -409,6 +409,7 @@ async function init() {
   });
   setupRatingStars();
   setMaxFechaNacimiento();
+  cargarCredencialesRecordadas();
   showSection('home');
 
   if (typeof firebaseReady === 'undefined' || !firebaseReady) {
@@ -780,14 +781,9 @@ function abrirEditarPerfil() {
     return;
   }
 
-  // Profesionales: ir al perfil completo editable
+  // Profesionales: abrir perfil en modo edición
   if (user.tipo === 'oficio') {
-    showMyProfile();
-    // Scroll al formulario de edición
-    setTimeout(() => {
-      const form = document.querySelector('#myProfileContent .detail-card form');
-      if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
+    showMyProfile(true);
     return;
   }
 
@@ -1083,28 +1079,49 @@ async function iniciarSesion(e) {
 
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
+  const remember = document.getElementById('loginRemember')?.checked;
 
   try {
     showToast('Ingresando...');
     const cred = await auth.signInWithEmailAndPassword(email, pass);
-    const profile = await loadUserProfile(cred.user.uid);
+    const profile = await loadUserProfileWithRetry(cred.user.uid);
     if (!profile) {
       showToast('No se encontró el perfil de usuario', 'error');
       await auth.signOut();
       return;
     }
     currentUserCache = { id: cred.user.uid, ...profile, email: cred.user.email };
+    if (remember) {
+      localStorage.setItem('oficiosya_remember', JSON.stringify({ email, pass }));
+    } else {
+      localStorage.removeItem('oficiosya_remember');
+    }
     updateNav();
-    showToast(`¡Bienvenido/a, ${currentUserCache.nombre.split(' ')[0]}!`);
+    showToast(`¡Bienvenido/a, ${(currentUserCache.nombre || '').split(' ')[0]}!`);
     if (currentUserCache.tipo === 'oficio') {
-      showMyProfile();
+      showMyProfile(false);
     } else {
       showSection('search');
     }
-    e.target.reset();
   } catch (err) {
     console.error(err);
     showToast('Email o contraseña incorrectos', 'error');
+  }
+}
+
+function cargarCredencialesRecordadas() {
+  try {
+    const raw = localStorage.getItem('oficiosya_remember');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    const emailEl = document.getElementById('loginEmail');
+    const passEl = document.getElementById('loginPass');
+    const rememberEl = document.getElementById('loginRemember');
+    if (emailEl && data.email) emailEl.value = data.email;
+    if (passEl && data.pass) passEl.value = data.pass;
+    if (rememberEl) rememberEl.checked = true;
+  } catch (e) {
+    console.warn(e);
   }
 }
 
@@ -1175,7 +1192,7 @@ async function realizarBusqueda() {
       return `
         <div class="prof-card">
           <div class="prof-header">
-            <div class="prof-avatar">${p.fotoPerfil ? `<img src="${p.fotoPerfil}" alt="${p.nombre}">` : iniciales}</div>
+            <div class="prof-avatar">${(p.fotoPerfil || '').trim() ? `<img src="${(p.fotoPerfil || '').trim()}" alt="${p.nombre || ''}" referrerpolicy="no-referrer">` : iniciales}</div>
             <div class="prof-header-info">
               <h3>${p.nombre}</h3>
               <span class="oficio-tag">${p.oficio}</span>
@@ -1276,8 +1293,9 @@ async function verPerfil(profId) {
   const currentUser = getCurrentUser();
   const puedeResenar = currentUser && currentUser.tipo === 'cliente';
   
-  const fotoPerfilHtml = prof.fotoPerfil
-    ? `<img class="prof-photo" src="${prof.fotoPerfil}" alt="${prof.nombre}">`
+  const fotoUrl = (prof.fotoPerfil || '').trim();
+  const fotoPerfilHtml = fotoUrl
+    ? `<img class="prof-photo" src="${fotoUrl}" alt="${prof.nombre || 'Profesional'}" width="120" height="120" loading="eager" referrerpolicy="no-referrer" onerror="this.onerror=null;this.style.display='none';this.insertAdjacentHTML('afterend','<div class=\'prof-photo-placeholder\'>${iniciales}</div>');">`
     : `<div class="prof-photo-placeholder">${iniciales}</div>`;
 
   let fotosHtml = '';
@@ -1348,7 +1366,6 @@ async function verPerfil(profId) {
             <div class="prof-info-row"><span class="k"><i class="fas fa-flag"></i> Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
             <div class="prof-info-row"><span class="k"><i class="fas fa-phone"></i> Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
             <div class="prof-info-row"><span class="k"><i class="fas fa-birthday-cake"></i> Edad</span><span class="v">${(() => { const e = edadDesdePerfil(prof); return e !== null ? e + ' años' : '—'; })()}</span></div>
-            ${prof.fechaNacimiento ? `<div class="prof-info-row"><span class="k"><i class="fas fa-calendar-alt"></i> Nacimiento</span><span class="v">${formatFechaNacimiento(prof.fechaNacimiento)}</span></div>` : ''}
           </div>
           ${prof.descripcion ? `<div style="margin-top:1.2rem;"><h3><i class="fas fa-quote-left"></i> Sobre el profesional</h3><p class="prof-about">${prof.descripcion}</p></div>` : ''}
         </div>
@@ -1407,12 +1424,13 @@ async function verPerfil(profId) {
 }
 
 // ===== MY PROFILE (profesional logueado) =====
-async function showMyProfile() {
+async function showMyProfile(editMode) {
   const user = getCurrentUser();
   if (!user || user.tipo !== 'oficio') {
     showSection('home');
     return;
   }
+  const isEdit = editMode === true;
 
   let prof;
   try {
@@ -1433,8 +1451,9 @@ async function showMyProfile() {
   const avg = getAverageRatingFromList(reviews, prof.id);
   const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-  const fotoPerfilHtml = prof.fotoPerfil
-    ? `<div class="my-photo-edit"><img class="prof-photo" src="${prof.fotoPerfil}" alt="${prof.nombre}"><label class="change-photo-btn" title="Cambiar foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`
+  const myFotoUrl = (prof.fotoPerfil || '').trim();
+  const fotoPerfilHtml = myFotoUrl
+    ? `<div class="my-photo-edit"><img class="prof-photo" src="${myFotoUrl}" alt="${prof.nombre || ''}" width="120" height="120" referrerpolicy="no-referrer" onerror="this.style.display='none';"><label class="change-photo-btn" title="Cambiar foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`
     : `<div class="my-photo-edit"><div class="prof-photo-placeholder">${iniciales}</div><label class="change-photo-btn" title="Subir foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`;
 
   let fotosHtml = '';
@@ -1501,13 +1520,14 @@ async function showMyProfile() {
         </div>
       </div>
     
-    <div class="prof-card-block" style="margin-bottom:1.25rem;">
+    ${isEdit ? `
+    <div class="prof-card-block" style="margin-bottom:1.25rem;" id="editProfileBlock">
       <h3><i class="fas fa-edit"></i> Editar información</h3>
       <form onsubmit="actualizarPerfil(event)">
         <div class="form-row">
           <div class="form-group">
             <label>Nombre</label>
-            <input type="text" id="editNombre" value="${prof.nombre}" required>
+            <input type="text" id="editNombre" value="${prof.nombre || ''}" required>
           </div>
           <div class="form-group">
             <label>DNI</label>
@@ -1517,7 +1537,7 @@ async function showMyProfile() {
         <div class="form-row">
           <div class="form-group">
             <label>Teléfono</label>
-            <input type="tel" id="editTelefono" value="${prof.telefono}" required>
+            <input type="tel" id="editTelefono" value="${prof.telefono || ''}" required>
           </div>
           <div class="form-group">
             <label>Fecha de nacimiento</label>
@@ -1535,13 +1555,13 @@ async function showMyProfile() {
           </div>
           <div class="form-group">
             <label>Años de experiencia</label>
-            <input type="number" id="editExperiencia" value="${prof.experiencia}" min="0" max="50" required>
+            <input type="number" id="editExperiencia" value="${prof.experiencia || 0}" min="0" max="50" required>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>Domicilio / Zona</label>
-            <input type="text" id="editDomicilio" value="${prof.domicilio}" required>
+            <input type="text" id="editDomicilio" value="${prof.domicilio || ''}" required>
           </div>
         </div>
         <div class="form-row">
@@ -1565,9 +1585,29 @@ async function showMyProfile() {
           <label>Descripción</label>
           <textarea id="editDescripcion" rows="3">${prof.descripcion || ''}</textarea>
         </div>
-        <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+          <button type="button" class="btn btn-secondary" onclick="showMyProfile(false)">Cancelar</button>
+        </div>
       </form>
     </div>
+    ` : `
+    <div class="prof-card-block" style="margin-bottom:1.25rem;">
+      <h3><i class="fas fa-id-card"></i> Mi información</h3>
+      <div class="prof-info-list">
+        <div class="prof-info-row"><span class="k">Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
+        <div class="prof-info-row"><span class="k">DNI</span><span class="v">${prof.dni || '—'}</span></div>
+        <div class="prof-info-row"><span class="k">Zona</span><span class="v">${prof.domicilio || '—'}</span></div>
+        <div class="prof-info-row"><span class="k">Localidad</span><span class="v">${prof.localidad || '—'}</span></div>
+        <div class="prof-info-row"><span class="k">Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
+        <div class="prof-info-row"><span class="k">Edad</span><span class="v">${(() => { const e = edadDesdePerfil(prof); return e !== null ? e + ' años' : '—'; })()}</span></div>
+      </div>
+      ${prof.descripcion ? `<p class="prof-about" style="margin-top:1rem;">${prof.descripcion}</p>` : ''}
+      <button type="button" class="btn btn-primary" style="margin-top:1.2rem;" onclick="showMyProfile(true)">
+        <i class="fas fa-user-edit"></i> Editar perfil
+      </button>
+    </div>
+    `}
     
     <div class="prof-card-block" style="margin-bottom:1.25rem;">
       <h3><i class="fas fa-camera"></i> Galería de trabajos</h3>
@@ -1582,7 +1622,12 @@ async function showMyProfile() {
   `;
 
   document.getElementById('myProfileContent').innerHTML = content;
-  cargarLocalidades('editProvincia', 'editLocalidad', prof.localidad);
+  if (isEdit) {
+    setMaxFechaNacimiento();
+    cargarLocalidades('editProvincia', 'editLocalidad', prof.localidad);
+    const block = document.getElementById('editProfileBlock');
+    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   showSection('myProfile');
 }
 
