@@ -448,6 +448,13 @@ async function init() {
     updateNav();
   });
 
+  // Si el usuario vuelve desde el link del email (?mode=verifyEmail&oobCode=...)
+  try {
+    await procesarLinkVerificacionEmail();
+  } catch (e) {
+    console.warn(e);
+  }
+
   // Sembrar profesionales demo solo si no hay ninguno
   try {
     await seedDemoIfEmpty();
@@ -927,23 +934,18 @@ async function registrarCliente(e) {
 
     try {
       await cred.user.sendEmailVerification({
-        url: window.location.href.split('#')[0],
+        url: window.location.href.split('?')[0].split('#')[0],
         handleCodeInApp: false
       });
     } catch (verErr) {
       console.error('Error al enviar verificación:', verErr);
     }
 
-    // Cerrar sesión hasta que verifique el email
-    await auth.signOut();
-    currentUserCache = null;
-    sessionStorage.removeItem('oficiosya_uid');
-
-    showToast('¡Cuenta creada! Te enviamos un email de verificación. Revisá tu correo y después iniciá sesión.');
+    currentUserCache = { id: uid, ...perfil, email };
+    sessionStorage.setItem('oficiosya_uid', uid);
     e.target.reset();
-    showSection('login');
-    const loginEmail = document.getElementById('loginEmail');
-    if (loginEmail) loginEmail.value = email;
+    showToast('Te enviamos un email de verificación.');
+    mostrarPantallaVerificacion(email);
   } catch (err) {
     console.error(err);
     currentUserCache = null;
@@ -1061,25 +1063,20 @@ async function registrarOficio(e) {
 
     try {
       await cred.user.sendEmailVerification({
-        url: window.location.href.split('#')[0],
+        url: window.location.href.split('?')[0].split('#')[0],
         handleCodeInApp: false
       });
     } catch (verErr) {
       console.error('Error al enviar verificación:', verErr);
     }
 
-    // Cerrar sesión hasta verificar el email
-    await auth.signOut();
-    currentUserCache = null;
-    sessionStorage.removeItem('oficiosya_uid');
-
-    showToast('¡Perfil creado! Te enviamos un email de verificación. Revisá tu correo y después iniciá sesión.');
+    currentUserCache = { id: uid, ...perfil, email };
+    sessionStorage.setItem('oficiosya_uid', uid);
     e.target.reset();
     const prev = document.getElementById('oficioFotoPreview');
     if (prev) prev.innerHTML = '<i class="fas fa-user-circle"></i><span>Sin foto</span>';
-    showSection('login');
-    const loginEmail = document.getElementById('loginEmail');
-    if (loginEmail) loginEmail.value = email;
+    showToast('Te enviamos un email de verificación.');
+    mostrarPantallaVerificacion(email);
   } catch (err) {
     console.error(err);
     currentUserCache = null;
@@ -1095,6 +1092,122 @@ async function registrarOficio(e) {
     updateNav();
   }
 }
+
+
+// ===== VERIFICACIÓN DE EMAIL (pantalla de espera + auto login) =====
+let verifyPollTimer = null;
+
+function detenerPollVerificacion() {
+  if (verifyPollTimer) {
+    clearInterval(verifyPollTimer);
+    verifyPollTimer = null;
+  }
+}
+
+function mostrarPantallaVerificacion(email) {
+  const el = document.getElementById('verifyEmailAddress');
+  if (el) el.textContent = email || (auth.currentUser && auth.currentUser.email) || '—';
+  showSection('verifyEmail');
+  iniciarPollVerificacion();
+}
+
+function iniciarPollVerificacion() {
+  detenerPollVerificacion();
+  // Consulta cada 3 s si el usuario ya confirmó el mail
+  verifyPollTimer = setInterval(() => {
+    comprobarVerificacionEmail(true);
+  }, 3000);
+  // Primera chequeo inmediato
+  setTimeout(() => comprobarVerificacionEmail(true), 800);
+}
+
+async function continuarTrasVerificacion() {
+  detenerPollVerificacion();
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    showSection('login');
+    return;
+  }
+  try {
+    const profile = await loadUserProfileWithRetry(firebaseUser.uid);
+    if (!profile) {
+      showToast('Perfil no encontrado. Intentá iniciar sesión.', 'error');
+      showSection('login');
+      return;
+    }
+    currentUserCache = { id: firebaseUser.uid, ...profile, email: firebaseUser.email };
+    sessionStorage.setItem('oficiosya_uid', firebaseUser.uid);
+    updateNav();
+    showToast('¡Email verificado! Bienvenido/a.');
+    if (profile.tipo === 'oficio') {
+      showMyProfile(false);
+    } else {
+      showSection('search');
+    }
+  } catch (err) {
+    console.error(err);
+    showSection('login');
+  }
+}
+
+/** silent=true cuando lo llama el polling (sin toasts de error) */
+async function comprobarVerificacionEmail(silent) {
+  try {
+    if (!firebaseReady || !auth.currentUser) {
+      if (!silent) {
+        showToast('No hay sesión activa. Iniciá sesión con tu email y contraseña.', 'error');
+        showSection('login');
+      }
+      return false;
+    }
+    await auth.currentUser.reload();
+    if (auth.currentUser.emailVerified) {
+      await continuarTrasVerificacion();
+      return true;
+    }
+    if (!silent) {
+      showToast('Aún no confirmamos la verificación. Revisá tu correo o esperá unos segundos.');
+    }
+    return false;
+  } catch (err) {
+    console.error(err);
+    if (!silent) showToast('No se pudo comprobar el estado del email', 'error');
+    return false;
+  }
+}
+
+window.comprobarVerificacionEmail = comprobarVerificacionEmail;
+window.mostrarPantallaVerificacion = mostrarPantallaVerificacion;
+
+/** Procesa el link de verificación si el usuario vuelve a la app con oobCode */
+async function procesarLinkVerificacionEmail() {
+  if (!firebaseReady) return;
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode');
+  const oobCode = params.get('oobCode');
+  if (mode === 'verifyEmail' && oobCode) {
+    try {
+      await auth.applyActionCode(oobCode);
+      showToast('¡Email verificado correctamente!');
+      // Limpiar query de la URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+        if (auth.currentUser.emailVerified) {
+          await continuarTrasVerificacion();
+        }
+      } else {
+        showSection('login');
+        showToast('Email verificado. Ahora podés iniciar sesión.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('El enlace de verificación no es válido o ya fue usado.', 'error');
+      showSection('login');
+    }
+  }
+}
+
 
 // ===== LOGIN / LOGOUT =====
 async function iniciarSesion(e) {
@@ -1117,12 +1230,14 @@ async function iniciarSesion(e) {
     // Cuando ya lo verificó, emailVerified es true y entra normal (sin volver a verificar).
     await cred.user.reload();
     if (!cred.user.emailVerified) {
-      await auth.signOut();
+      // Mantener sesión y mostrar pantalla de espera (auto-ingreso al verificar)
       currentUserCache = null;
       updateNav();
-      showToast('Todavía no verificaste tu email. Revisá el correo del registro (o usá “Reenviar correo”).', 'error');
+      mostrarPantallaVerificacion(email);
+      showToast('Todavía falta verificar tu email. Revisá tu correo.');
       return;
     }
+    detenerPollVerificacion();
 
     const profile = await loadUserProfileWithRetry(cred.user.uid);
     if (!profile) {
@@ -1149,7 +1264,6 @@ async function iniciarSesion(e) {
   }
 }
 
-/** Reenvía el email de verificación (usuario debe estar logueado o pasar email/pass) */
 async function reenviarVerificacionEmail() {
   try {
     requireFirebase();
@@ -1157,17 +1271,19 @@ async function reenviarVerificacionEmail() {
     if (user) {
       await user.reload();
       if (user.emailVerified) {
-        showToast('Tu email ya está verificado. Podés iniciar sesión.');
+        showToast('Tu email ya está verificado.');
+        await continuarTrasVerificacion();
         return;
       }
       await user.sendEmailVerification({
-        url: window.location.href.split('#')[0],
+        url: window.location.href.split('?')[0].split('#')[0],
         handleCodeInApp: false
       });
-      showToast('Email de verificación reenviado. Revisá tu bandeja de entrada.');
+      showToast('Email de verificación reenviado. Revisá tu bandeja y spam.');
       return;
     }
-    showToast('Iniciá sesión con tu email y contraseña; si no está verificado, se reenvía el correo automáticamente.', 'error');
+    showToast('Para reenviar, iniciá sesión con tu email y contraseña (te llevaremos a la pantalla de espera).', 'error');
+    showSection('login');
   } catch (err) {
     console.error(err);
     showToast('No se pudo reenviar el email. Intentá más tarde.', 'error');
