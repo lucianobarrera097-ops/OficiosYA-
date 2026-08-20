@@ -510,6 +510,34 @@ function cargarLocalidades(provinciaSelectId, localidadSelectId, selectedLocalid
   }
 }
 
+
+// ===== FOTO DE PERFIL (registro / edición) =====
+let oficioFotoPerfilDataUrl = null;
+
+function previewFotoRegistro(e) {
+  const file = e.target.files && e.target.files[0];
+  const preview = document.getElementById('oficioFotoPreview');
+  if (!file || !preview) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('Solo se permiten imágenes', 'error');
+    e.target.value = '';
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('La foto debe pesar menos de 2MB', 'error');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    oficioFotoPerfilDataUrl = ev.target.result;
+    preview.innerHTML = `<img src="${oficioFotoPerfilDataUrl}" alt="Vista previa">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+window.previewFotoRegistro = previewFotoRegistro;
+
 // Exponer en window por si se llama desde HTML
 window.cargarLocalidades = cargarLocalidades;
 
@@ -667,15 +695,27 @@ function updateNav() {
     if (navUserMenu) navUserMenu.style.display = 'block';
 
     const iniciales = getUserIniciales(user.nombre);
-    const firstName = user.nombre.split(' ')[0];
+    const firstName = (user.nombre || '').split(' ')[0];
     const avatar = document.getElementById('userAvatar');
     const avatarDrop = document.getElementById('userAvatarDrop');
     const nameEl = document.getElementById('userMenuName');
     const dropName = document.getElementById('userDropName');
     const dropRole = document.getElementById('userDropRole');
 
-    if (avatar) avatar.textContent = iniciales;
-    if (avatarDrop) avatarDrop.textContent = iniciales;
+    if (avatar) {
+      if (user.fotoPerfil) {
+        avatar.innerHTML = `<img src="${user.fotoPerfil}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        avatar.textContent = iniciales;
+      }
+    }
+    if (avatarDrop) {
+      if (user.fotoPerfil) {
+        avatarDrop.innerHTML = `<img src="${user.fotoPerfil}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        avatarDrop.textContent = iniciales;
+      }
+    }
     if (nameEl) nameEl.textContent = firstName;
     if (dropName) dropName.textContent = user.nombre;
     if (dropRole) dropRole.textContent = user.tipo === 'oficio' ? (user.oficio || 'Profesional') : 'Cliente';
@@ -736,6 +776,10 @@ function abrirEditarPerfil() {
   document.getElementById('accNombre').value = user.nombre || '';
   document.getElementById('accEmail').value = user.email || '';
   document.getElementById('accTelefono').value = user.telefono || '';
+  const av = document.getElementById('clientProfileAvatar');
+  const title = document.getElementById('clientProfileTitle');
+  if (av) av.textContent = getUserIniciales(user.nombre);
+  if (title) title.textContent = user.nombre || 'Mi cuenta';
 
   const provSel = document.getElementById('accProvincia');
   if (provSel && provSel.options.length <= 1) {
@@ -898,6 +942,12 @@ async function registrarOficio(e) {
     return;
   }
 
+  const fotoInput = document.getElementById('oficioFotoPerfil');
+  if (!oficioFotoPerfilDataUrl && (!fotoInput || !fotoInput.files || !fotoInput.files[0])) {
+    showToast('La foto de perfil es obligatoria para profesionales', 'error');
+    return;
+  }
+
   try {
     // Verificar DNI único
     const dniSnap = await db.collection('users').where('dni', '==', dni).limit(1).get();
@@ -909,6 +959,25 @@ async function registrarOficio(e) {
     showToast('Creando cuenta profesional...');
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const uid = cred.user.uid;
+
+    let fotoPerfilUrl = '';
+    try {
+      if (!oficioFotoPerfilDataUrl && fotoInput.files[0]) {
+        const file = fotoInput.files[0];
+        oficioFotoPerfilDataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+      fotoPerfilUrl = await uploadImage(`users/${uid}/perfil.jpg`, oficioFotoPerfilDataUrl);
+    } catch (upErr) {
+      console.error(upErr);
+      showToast('No se pudo subir la foto de perfil. Revisá Storage en Firebase.', 'error');
+      try { await cred.user.delete(); } catch (_) {}
+      return;
+    }
 
     const perfil = {
       tipo: 'oficio',
@@ -923,16 +992,20 @@ async function registrarOficio(e) {
       localidad: document.getElementById('oficioLocalidad').value,
       provincia: document.getElementById('oficioProvincia').value,
       descripcion: document.getElementById('oficioDescripcion').value.trim(),
+      fotoPerfil: fotoPerfilUrl,
       fotos: [],
       createdAt: new Date().toISOString()
     };
 
     await db.collection('users').doc(uid).set(perfil);
     currentUserCache = { id: uid, ...perfil };
+    oficioFotoPerfilDataUrl = null;
     updateNav();
-    showToast('¡Perfil profesional creado! Completá tu perfil y agregá fotos de tus trabajos.');
+    showToast('¡Perfil profesional creado!');
     showMyProfile();
     e.target.reset();
+    const prev = document.getElementById('oficioFotoPreview');
+    if (prev) prev.innerHTML = '<i class="fas fa-user-circle"></i><span>Sin foto</span>';
   } catch (err) {
     console.error(err);
     if (err.code === 'auth/email-already-in-use') {
@@ -1048,7 +1121,7 @@ async function realizarBusqueda() {
       return `
         <div class="prof-card">
           <div class="prof-header">
-            <div class="prof-avatar">${iniciales}</div>
+            <div class="prof-avatar">${p.fotoPerfil ? `<img src="${p.fotoPerfil}" alt="${p.nombre}">` : iniciales}</div>
             <div class="prof-header-info">
               <h3>${p.nombre}</h3>
               <span class="oficio-tag">${p.oficio}</span>
@@ -1149,17 +1222,21 @@ async function verPerfil(profId) {
   const currentUser = getCurrentUser();
   const puedeResenar = currentUser && currentUser.tipo === 'cliente';
   
+  const fotoPerfilHtml = prof.fotoPerfil
+    ? `<img class="prof-photo" src="${prof.fotoPerfil}" alt="${prof.nombre}">`
+    : `<div class="prof-photo-placeholder">${iniciales}</div>`;
+
   let fotosHtml = '';
   if (prof.fotos && prof.fotos.length > 0) {
     fotosHtml = prof.fotos.map(f => `
-      <div class="photo-item">
-        <img src="${f}" alt="Trabajo de ${prof.nombre}">
+      <div class="prof-gallery-item">
+        <img src="${f}" alt="Trabajo de ${prof.nombre}" loading="lazy">
       </div>
     `).join('');
   } else {
-    fotosHtml = '<p style="color:var(--text-light);">Aún no hay fotos de trabajos.</p>';
+    fotosHtml = `<div class="prof-gallery-empty"><i class="fas fa-images" style="font-size:2rem;opacity:0.4;display:block;margin-bottom:0.5rem;"></i>Aún no hay fotos de trabajos publicados.</div>`;
   }
-  
+
   let reviewsHtml = '';
   if (reviews.length > 0) {
     reviewsHtml = reviews.map(r => `
@@ -1179,86 +1256,97 @@ async function verPerfil(profId) {
   } else {
     reviewsHtml = '<p style="color:var(--text-light);">Todavía no hay reseñas. ¡Sé el primero en comentar!</p>';
   }
-  
+
+  const bar = (val) => Math.min(100, (parseFloat(val) || 0) * 20);
+
   const content = `
-    <div class="profile-header">
-      <div class="profile-avatar-lg">${iniciales}</div>
-      <div class="profile-info">
-        <h2>${prof.nombre}</h2>
-        <span class="oficio-badge">${prof.oficio}</span>
-        <div class="profile-stats">
-          <div class="profile-stat"><i class="fas fa-map-marker-alt"></i> ${prof.localidad}, ${prof.provincia}</div>
-          <div class="profile-stat"><i class="fas fa-briefcase"></i> ${prof.experiencia} años de experiencia</div>
-          <div class="profile-stat"><i class="fas fa-birthday-cake"></i> ${prof.edad} años</div>
-          <div class="profile-stat"><i class="fas fa-phone"></i> ${prof.telefono}</div>
+    <div class="prof-profile">
+      <div class="prof-hero">
+        <div class="prof-hero-top">
+          ${fotoPerfilHtml}
+          <div class="prof-hero-info">
+            <h1>${prof.nombre}</h1>
+            <div class="prof-badge-row">
+              <span class="prof-chip accent"><i class="fas fa-briefcase"></i> ${prof.oficio || 'Profesional'}</span>
+              <span class="prof-chip"><i class="fas fa-star"></i> ${avg.promedio > 0 ? avg.promedio + ' / 5' : 'Sin valoraciones'}</span>
+            </div>
+            <div class="prof-hero-meta">
+              <span><i class="fas fa-map-marker-alt"></i> ${prof.localidad || ''}, ${prof.provincia || ''}</span>
+              <span><i class="fas fa-clock"></i> ${prof.experiencia || 0} años de experiencia</span>
+              <span><i class="fas fa-phone"></i> ${prof.telefono || '—'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="prof-score-bar">
+          <div class="prof-score-item"><span class="val">${avg.promedio || '—'}</span><span class="lbl">Promedio</span></div>
+          <div class="prof-score-item"><span class="val">${avg.count}</span><span class="lbl">Reseñas</span></div>
+          <div class="prof-score-item"><span class="val">${prof.experiencia || 0}</span><span class="lbl">Años exp.</span></div>
+          <div class="prof-score-item"><span class="val">${(prof.fotos || []).length}</span><span class="lbl">Trabajos</span></div>
         </div>
       </div>
-    </div>
-    
-    <div class="profile-details">
-      <div class="detail-card">
-        <h3><i class="fas fa-info-circle"></i> Información</h3>
-        <div class="detail-item"><span>Domicilio / Zona</span><span>${prof.domicilio}</span></div>
-        <div class="detail-item"><span>Localidad</span><span>${prof.localidad}</span></div>
-        <div class="detail-item"><span>Provincia</span><span>${prof.provincia}</span></div>
-        <div class="detail-item"><span>Contacto</span><span>${prof.telefono}</span></div>
-      </div>
-      <div class="detail-card">
-        <h3><i class="fas fa-star"></i> Valoraciones</h3>
-        <div class="avg-rating">
-          ${renderStars(avg.promedio)}
-          <span style="color:var(--text-light);font-size:0.95rem;">(${avg.count} reseñas)</span>
+
+      <div class="prof-grid">
+        <div class="prof-card-block">
+          <h3><i class="fas fa-id-card"></i> Información de contacto</h3>
+          <div class="prof-info-list">
+            <div class="prof-info-row"><span class="k"><i class="fas fa-map"></i> Zona</span><span class="v">${prof.domicilio || '—'}</span></div>
+            <div class="prof-info-row"><span class="k"><i class="fas fa-city"></i> Localidad</span><span class="v">${prof.localidad || '—'}</span></div>
+            <div class="prof-info-row"><span class="k"><i class="fas fa-flag"></i> Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
+            <div class="prof-info-row"><span class="k"><i class="fas fa-phone"></i> Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
+            <div class="prof-info-row"><span class="k"><i class="fas fa-user"></i> Edad</span><span class="v">${prof.edad ? prof.edad + ' años' : '—'}</span></div>
+          </div>
+          ${prof.descripcion ? `<div style="margin-top:1.2rem;"><h3><i class="fas fa-quote-left"></i> Sobre el profesional</h3><p class="prof-about">${prof.descripcion}</p></div>` : ''}
         </div>
-        ${avg.count > 0 ? `
-          <div class="detail-item"><span>Calidad del trabajo</span><span>${avg.calidad} ★</span></div>
-          <div class="detail-item"><span>Tiempo de respuesta</span><span>${avg.tiempo} ★</span></div>
-          <div class="detail-item"><span>Precio</span><span>${avg.precio} ★</span></div>
-        ` : '<p style="color:var(--text-light);">Sin valoraciones aún</p>'}
+        <div class="prof-card-block">
+          <h3><i class="fas fa-chart-bar"></i> Valoraciones</h3>
+          <div class="avg-rating" style="margin-bottom:1rem;">${renderStars(avg.promedio)} <span style="color:var(--text-light);font-size:0.9rem;">(${avg.count})</span></div>
+          ${avg.count > 0 ? `
+            <div class="prof-rating-bars">
+              <div class="prof-rating-bar-row"><span>Calidad</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.calidad)}%"></div></div><strong>${avg.calidad}</strong></div>
+              <div class="prof-rating-bar-row"><span>Tiempo</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.tiempo)}%"></div></div><strong>${avg.tiempo}</strong></div>
+              <div class="prof-rating-bar-row"><span>Precio</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.precio)}%"></div></div><strong>${avg.precio}</strong></div>
+            </div>
+          ` : '<p style="color:var(--text-light);">Sin valoraciones todavía.</p>'}
+        </div>
       </div>
-    </div>
-    
-    ${prof.descripcion ? `
-      <div class="detail-card" style="margin-bottom:2rem;">
-        <h3><i class="fas fa-comment"></i> Sobre mí</h3>
-        <p>${prof.descripcion}</p>
+
+      <div class="prof-card-block" style="margin-bottom:1.25rem;">
+        <h3><i class="fas fa-camera"></i> Galería de trabajos</h3>
+        <div class="prof-gallery">${fotosHtml}</div>
       </div>
-    ` : ''}
-    
-    <div class="photos-section">
-      <h3><i class="fas fa-camera"></i> Trabajos realizados</h3>
-      <div class="photos-grid">${fotosHtml}</div>
-    </div>
-    
-    <div class="reviews-section">
-      <h3><i class="fas fa-comments"></i> Reseñas de clientes</h3>
-      ${puedeResenar ? `
-        <button class="btn btn-primary" style="margin-bottom:1.2rem;" onclick="abrirModalResena('${prof.id}')">
-          <i class="fas fa-pen"></i> Dejar reseña
+
+      <div class="prof-card-block">
+        <h3><i class="fas fa-comments"></i> Opiniones de clientes</h3>
+        ${puedeResenar ? `
+          <button class="btn btn-primary" style="margin-bottom:1.2rem;" onclick="abrirModalResena('${prof.id}')">
+            <i class="fas fa-pen"></i> Dejar reseña
+          </button>
+        ` : currentUser ? '' : `
+          <p style="margin-bottom:1rem;color:var(--text-light);">
+            <a href="#" onclick="showSection('login')" style="color:var(--primary);font-weight:600;">Iniciá sesión</a> como cliente para dejar una reseña.
+          </p>
+        `}
+        ${reviewsHtml}
+      </div>
+
+      <div class="prof-actions-bar">
+        ${puedeResenar ? `
+          <button class="btn btn-primary" onclick="abrirModalPresupuesto('${prof.id}', '${(prof.nombre || '').replace(/'/g, "\\'")}')">
+            <i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto
+          </button>
+          <a class="btn btn-secondary" href="tel:${prof.telefono || ''}"><i class="fas fa-phone"></i> Llamar</a>
+        ` : !currentUser ? `
+          <button class="btn btn-primary" onclick="showSection('login')">
+            <i class="fas fa-sign-in-alt"></i> Iniciá sesión para contactar
+          </button>
+        ` : ''}
+        <button class="btn btn-secondary" onclick="showSection('search')">
+          <i class="fas fa-arrow-left"></i> Volver a la búsqueda
         </button>
-      ` : currentUser ? '' : `
-        <p style="margin-bottom:1rem;color:var(--text-light);">
-          <a href="#" onclick="showSection('login')" style="color:var(--primary);font-weight:600;">Iniciá sesión</a> como cliente para dejar una reseña.
-        </p>
-      `}
-      ${reviewsHtml}
-    </div>
-    
-    <div style="margin-top:2rem;text-align:center;display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap;">
-      ${puedeResenar ? `
-        <button class="btn btn-primary" onclick="abrirModalPresupuesto('${prof.id}', '${prof.nombre.replace(/'/g, "\\'")}')">
-          <i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto
-        </button>
-      ` : !currentUser ? `
-        <button class="btn btn-primary" onclick="showSection('login')">
-          <i class="fas fa-file-invoice-dollar"></i> Iniciá sesión para pedir presupuesto
-        </button>
-      ` : ''}
-      <button class="btn btn-secondary" onclick="showSection('search')">
-        <i class="fas fa-arrow-left"></i> Volver a la búsqueda
-      </button>
+      </div>
     </div>
   `;
-  
+
   document.getElementById('profileContent').innerHTML = content;
   showSection('profile');
 }
@@ -1289,27 +1377,31 @@ async function showMyProfile() {
   const reviews = (await getReviewsByProf(prof.id)).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   const avg = getAverageRatingFromList(reviews, prof.id);
   const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  
+
+  const fotoPerfilHtml = prof.fotoPerfil
+    ? `<div class="my-photo-edit"><img class="prof-photo" src="${prof.fotoPerfil}" alt="${prof.nombre}"><label class="change-photo-btn" title="Cambiar foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`
+    : `<div class="my-photo-edit"><div class="prof-photo-placeholder">${iniciales}</div><label class="change-photo-btn" title="Subir foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`;
+
   let fotosHtml = '';
   if (prof.fotos && prof.fotos.length > 0) {
     fotosHtml = prof.fotos.map((f, i) => `
-      <div class="photo-item">
+      <div class="prof-gallery-item">
         <img src="${f}" alt="Trabajo">
-        <button onclick="eliminarFoto(${i})" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;">
+        <button onclick="eliminarFoto(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.65);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;">
           <i class="fas fa-times"></i>
         </button>
       </div>
     `).join('');
   }
-  
+
   fotosHtml += `
-    <label class="photo-upload">
+    <label class="photo-upload" style="aspect-ratio:1;border-radius:12px;">
       <i class="fas fa-plus"></i>
-      <span style="font-size:0.8rem;">Agregar foto</span>
+      <span style="font-size:0.8rem;">Agregar trabajo</span>
       <input type="file" accept="image/*" onchange="subirFoto(event)">
     </label>
   `;
-  
+
   let reviewsHtml = '';
   if (reviews.length > 0) {
     reviewsHtml = reviews.map(r => `
@@ -1329,24 +1421,32 @@ async function showMyProfile() {
   } else {
     reviewsHtml = '<p style="color:var(--text-light);">Todavía no recibiste reseñas.</p>';
   }
-  
+
   const content = `
-    <h2 class="section-title">Mi Perfil Profesional</h2>
-    
-    <div class="profile-header">
-      <div class="profile-avatar-lg">${iniciales}</div>
-      <div class="profile-info">
-        <h2>${prof.nombre}</h2>
-        <span class="oficio-badge">${prof.oficio}</span>
-        <div class="profile-stats">
-          <div class="profile-stat"><i class="fas fa-map-marker-alt"></i> ${prof.localidad}, ${prof.provincia}</div>
-          <div class="profile-stat"><i class="fas fa-briefcase"></i> ${prof.experiencia} años</div>
-          <div class="profile-stat"><i class="fas fa-star"></i> ${avg.promedio > 0 ? avg.promedio + ' ★' : 'Sin valoraciones'} (${avg.count})</div>
+    <div class="prof-profile">
+      <div class="prof-hero">
+        <div class="prof-hero-top">
+          ${fotoPerfilHtml}
+          <div class="prof-hero-info">
+            <h1>${prof.nombre}</h1>
+            <div class="prof-badge-row">
+              <span class="prof-chip accent"><i class="fas fa-briefcase"></i> ${prof.oficio || ''}</span>
+              <span class="prof-chip"><i class="fas fa-star"></i> ${avg.promedio > 0 ? avg.promedio + ' ★' : 'Sin valoraciones'}</span>
+            </div>
+            <div class="prof-hero-meta">
+              <span><i class="fas fa-map-marker-alt"></i> ${prof.localidad}, ${prof.provincia}</span>
+              <span><i class="fas fa-clock"></i> ${prof.experiencia} años exp.</span>
+            </div>
+          </div>
+        </div>
+        <div class="prof-score-bar">
+          <div class="prof-score-item"><span class="val">${avg.promedio || '—'}</span><span class="lbl">Promedio</span></div>
+          <div class="prof-score-item"><span class="val">${avg.count}</span><span class="lbl">Reseñas</span></div>
+          <div class="prof-score-item"><span class="val">${(prof.fotos || []).length}</span><span class="lbl">Trabajos</span></div>
         </div>
       </div>
-    </div>
     
-    <div class="detail-card" style="margin-bottom:2rem;">
+    <div class="prof-card-block" style="margin-bottom:1.25rem;">
       <h3><i class="fas fa-edit"></i> Editar información</h3>
       <form onsubmit="actualizarPerfil(event)">
         <div class="form-row">
@@ -1414,19 +1514,19 @@ async function showMyProfile() {
       </form>
     </div>
     
-    <div class="photos-section">
-      <h3><i class="fas fa-camera"></i> Mis trabajos (fotos)</h3>
-      <div class="photos-grid">${fotosHtml}</div>
+    <div class="prof-card-block" style="margin-bottom:1.25rem;">
+      <h3><i class="fas fa-camera"></i> Galería de trabajos</h3>
+      <div class="prof-gallery">${fotosHtml}</div>
     </div>
-    
-    <div class="reviews-section">
+
+    <div class="prof-card-block">
       <h3><i class="fas fa-comments"></i> Reseñas recibidas (${reviews.length})</h3>
       ${reviewsHtml}
     </div>
+    </div>
   `;
-  
+
   document.getElementById('myProfileContent').innerHTML = content;
-  // Cargar localidades de la provincia actual y preseleccionar
   cargarLocalidades('editProvincia', 'editLocalidad', prof.localidad);
   showSection('myProfile');
 }
@@ -1471,6 +1571,40 @@ async function actualizarPerfil(e) {
     showToast('Error al guardar el perfil', 'error');
   }
 }
+
+
+async function cambiarFotoPerfil(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const user = getCurrentUser();
+  if (!user) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('Solo se permiten imágenes', 'error');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Máximo 2MB', 'error');
+    return;
+  }
+  try {
+    showToast('Actualizando foto de perfil...');
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+    const url = await uploadImage(`users/${user.id}/perfil_${Date.now()}.jpg`, dataUrl);
+    await db.collection('users').doc(user.id).update({ fotoPerfil: url });
+    currentUserCache = { ...user, fotoPerfil: url };
+    showToast('Foto de perfil actualizada');
+    showMyProfile();
+  } catch (err) {
+    console.error(err);
+    showToast('Error al actualizar la foto', 'error');
+  }
+}
+window.cambiarFotoPerfil = cambiarFotoPerfil;
 
 async function subirFoto(e) {
   const file = e.target.files[0];
@@ -1634,12 +1768,7 @@ async function enviarResena(e) {
     };
 
     await db.collection('reviews').add(nueva);
-
-    await saveNotification(profId, {
-      tipo: 'resena',
-      mensaje: `${user.nombre} te dejó una reseña y valoración.`,
-      detalle: `"${comentario.substring(0, 60)}${comentario.length > 60 ? '...' : ''}" — Calidad: ${currentRatings.calidad}★, Tiempo: ${currentRatings.tiempo}★, Precio: ${currentRatings.precio}★`
-    });
+    // La notificación la crea la Cloud Function onReviewCreated
 
     cerrarModal();
     showToast('¡Reseña enviada con éxito!');
@@ -1829,14 +1958,8 @@ async function enviarPresupuesto(e) {
       estado: 'pendiente'
     };
 
-    const ref = await db.collection('quotes').add(quote);
-
-    await saveNotification(profId, {
-      tipo: 'presupuesto',
-      mensaje: `${user.nombre} te solicitó un presupuesto (${urgencia}).`,
-      detalle: descripcion.substring(0, 120) + (descripcion.length > 120 ? '...' : ''),
-      quoteId: ref.id
-    });
+    await db.collection('quotes').add(quote);
+    // La notificación la crea la Cloud Function onQuoteCreated
 
     cerrarModalPresupuesto();
     showToast('¡Solicitud de presupuesto enviada! El profesional te contactará.');
