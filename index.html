@@ -470,6 +470,34 @@
     </div>
   </section>
 
+  <!-- ESPERA VERIFICACIÓN DE EMAIL -->
+  <section id="verifyEmail" class="section">
+    <div class="container">
+      <div class="verify-card">
+        <div class="verify-icon">
+          <i class="fas fa-envelope-open-text"></i>
+        </div>
+        <h2>Verificando tu correo electrónico</h2>
+        <p class="verify-lead">Estamos esperando que confirmes tu dirección de correo electrónico.</p>
+        <p>Revisa tu bandeja de entrada y haz clic en el enlace de verificación que te enviamos. Una vez que completes la verificación, podrás continuar automáticamente.</p>
+        <p class="verify-spam">¿No recibiste el correo? Revisa también tu carpeta de spam o correo no deseado.</p>
+        <div class="verify-wait">
+          <div class="verify-spinner"></div>
+          <p>Por favor, espera mientras verificamos tu correo electrónico.</p>
+        </div>
+        <p class="verify-email-line">Correo: <strong id="verifyEmailAddress">—</strong></p>
+        <div class="verify-actions">
+          <button type="button" class="btn btn-secondary" onclick="reenviarVerificacionEmail()">
+            <i class="fas fa-paper-plane"></i> Reenviar correo
+          </button>
+          <button type="button" class="btn btn-primary" onclick="comprobarVerificacionEmail()">
+            <i class="fas fa-sync"></i> Ya verifiqué
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- LOGIN SECTION -->
   <section id="login" class="section">
     <div class="container">
