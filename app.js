@@ -933,18 +933,16 @@ async function registrarCliente(e) {
     await db.collection('users').doc(uid).set(perfil);
 
     try {
-      await cred.user.sendEmailVerification({
-        url: window.location.href.split('?')[0].split('#')[0],
-        handleCodeInApp: false
-      });
+      await enviarEmailVerificacion(cred.user);
+      showToast('Te enviamos un email de verificación. Revisá bandeja de entrada y spam.');
     } catch (verErr) {
       console.error('Error al enviar verificación:', verErr);
+      showToast(verErr.message || 'Cuenta creada, pero no se pudo enviar el email. Usá Reenviar correo.', 'error');
     }
 
     currentUserCache = { id: uid, ...perfil, email };
     sessionStorage.setItem('oficiosya_uid', uid);
     e.target.reset();
-    showToast('Te enviamos un email de verificación.');
     mostrarPantallaVerificacion(email);
   } catch (err) {
     console.error(err);
@@ -1062,12 +1060,11 @@ async function registrarOficio(e) {
     oficioFotoPerfilDataUrl = null;
 
     try {
-      await cred.user.sendEmailVerification({
-        url: window.location.href.split('?')[0].split('#')[0],
-        handleCodeInApp: false
-      });
+      await enviarEmailVerificacion(cred.user);
+      showToast('Te enviamos un email de verificación. Revisá bandeja de entrada y spam.');
     } catch (verErr) {
       console.error('Error al enviar verificación:', verErr);
+      showToast(verErr.message || 'Cuenta creada, pero no se pudo enviar el email. Usá Reenviar correo.', 'error');
     }
 
     currentUserCache = { id: uid, ...perfil, email };
@@ -1075,7 +1072,6 @@ async function registrarOficio(e) {
     e.target.reset();
     const prev = document.getElementById('oficioFotoPreview');
     if (prev) prev.innerHTML = '<i class="fas fa-user-circle"></i><span>Sin foto</span>';
-    showToast('Te enviamos un email de verificación.');
     mostrarPantallaVerificacion(email);
   } catch (err) {
     console.error(err);
@@ -1093,6 +1089,40 @@ async function registrarOficio(e) {
   }
 }
 
+
+
+/** Envía el mail de verificación con reintentos y mensajes claros */
+async function enviarEmailVerificacion(user) {
+  if (!user) throw new Error('No hay usuario para verificar');
+  const continueUrl = window.location.href.split('?')[0].split('#')[0];
+  // 1) Intento con URL de retorno (debe estar en dominios autorizados de Firebase)
+  try {
+    await user.sendEmailVerification({
+      url: continueUrl,
+      handleCodeInApp: false
+    });
+    console.log('Email de verificación enviado (con continueUrl)');
+    return true;
+  } catch (err1) {
+    console.warn('Falló envío con continueUrl, reintento simple:', err1.code, err1.message);
+  }
+  // 2) Sin actionCodeSettings (a veces funciona cuando el dominio no está autorizado)
+  try {
+    await user.sendEmailVerification();
+    console.log('Email de verificación enviado (simple)');
+    return true;
+  } catch (err2) {
+    console.error('Error definitivo al enviar verificación:', err2.code, err2.message);
+    const code = err2.code || '';
+    if (code === 'auth/too-many-requests') {
+      throw new Error('Demasiados intentos. Esperá unos minutos y reenviá el correo.');
+    }
+    if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
+      throw new Error('El dominio de la app no está autorizado en Firebase (Authentication → Settings → Authorized domains).');
+    }
+    throw new Error(err2.message || 'No se pudo enviar el email de verificación');
+  }
+}
 
 // ===== VERIFICACIÓN DE EMAIL (pantalla de espera + auto login) =====
 let verifyPollTimer = null;
@@ -1275,11 +1305,8 @@ async function reenviarVerificacionEmail() {
         await continuarTrasVerificacion();
         return;
       }
-      await user.sendEmailVerification({
-        url: window.location.href.split('?')[0].split('#')[0],
-        handleCodeInApp: false
-      });
-      showToast('Email de verificación reenviado. Revisá tu bandeja y spam.');
+      await enviarEmailVerificacion(user);
+      showToast('Email de verificación reenviado. Revisá bandeja de entrada y spam.');
       return;
     }
     showToast('Para reenviar, iniciá sesión con tu email y contraseña (te llevaremos a la pantalla de espera).', 'error');
