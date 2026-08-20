@@ -53,6 +53,11 @@
       <ul class="nav-links" id="navLinks">
         <li><a href="#" onclick="showSection('home')">Inicio</a></li>
         <li><a href="#" onclick="showSection('search')">Buscar Oficios</a></li>
+        <li id="navInstall" style="display:none;">
+          <button type="button" class="btn-install-nav" onclick="instalarApp()">
+            <i class="fas fa-download"></i> Instalar app
+          </button>
+        </li>
         <li id="navRegister"><a href="#" onclick="showSection('register')">Registrarse</a></li>
         <li id="navLogin"><a href="#" onclick="showSection('login')">Iniciar Sesión</a></li>
         <li id="navNotifications" style="display:none;">
@@ -107,6 +112,9 @@
         <div class="hero-buttons">
           <button class="btn btn-primary" onclick="showSection('search')">Buscar ahora</button>
           <button class="btn btn-outline" onclick="showSection('register')">Registrarme</button>
+          <button type="button" class="btn btn-install" id="btnInstallHero" style="display:none;" onclick="instalarApp()">
+            <i class="fas fa-download"></i> Instalar app
+          </button>
         </div>
       </div>
     </header>
