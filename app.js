@@ -1,12 +1,23 @@
 // ===== DATA & STORAGE (Firebase) =====
 // currentUser se mantiene en memoria + sessionStorage para la UI
 let currentUserCache = null;
+// Evita que onAuthStateChanged borre la sesión mientras registramos el perfil en Firestore
+let authBusy = false;
 
 function requireFirebase() {
   if (typeof firebaseReady === 'undefined' || !firebaseReady) {
     showToast('Firebase no está configurado. Completá firebase-config.js', 'error');
     throw new Error('Firebase no configurado');
   }
+}
+
+async function loadUserProfileWithRetry(uid, attempts = 8, delayMs = 300) {
+  for (let i = 0; i < attempts; i++) {
+    const profile = await loadUserProfile(uid);
+    if (profile) return profile;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return null;
 }
 
 // ===== PROVINCIAS Y LOCALIDADES (principales) =====
@@ -397,6 +408,7 @@ async function init() {
     }
   });
   setupRatingStars();
+  setMaxFechaNacimiento();
   showSection('home');
 
   if (typeof firebaseReady === 'undefined' || !firebaseReady) {
@@ -410,20 +422,27 @@ async function init() {
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
       try {
-        const profile = await loadUserProfile(firebaseUser.uid);
+        // Si estamos en medio del registro, no pisar la sesión
+        if (authBusy && currentUserCache && currentUserCache.id === firebaseUser.uid) {
+          updateNav();
+          return;
+        }
+        const profile = await loadUserProfileWithRetry(firebaseUser.uid);
         if (profile) {
           currentUserCache = { ...profile, id: firebaseUser.uid, email: firebaseUser.email };
           sessionStorage.setItem('oficiosya_uid', firebaseUser.uid);
-        } else {
-          currentUserCache = null;
+        } else if (!authBusy) {
+          // Perfil aún no existe (registro a medias): no forzar logout visual
+          console.warn('Perfil no encontrado todavía para', firebaseUser.uid);
         }
       } catch (err) {
         console.error(err);
-        currentUserCache = null;
       }
     } else {
-      currentUserCache = null;
-      sessionStorage.removeItem('oficiosya_uid');
+      if (!authBusy) {
+        currentUserCache = null;
+        sessionStorage.removeItem('oficiosya_uid');
+      }
     }
     updateNav();
   });
@@ -892,6 +911,7 @@ async function registrarCliente(e) {
   const email = document.getElementById('clienteEmail').value.trim().toLowerCase();
   const password = document.getElementById('clientePass').value;
 
+  authBusy = true;
   try {
     showToast('Creando cuenta...');
     const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -908,13 +928,15 @@ async function registrarCliente(e) {
     };
 
     await db.collection('users').doc(uid).set(perfil);
-    currentUserCache = { id: uid, ...perfil };
+    currentUserCache = { id: uid, ...perfil, email };
+    sessionStorage.setItem('oficiosya_uid', uid);
     updateNav();
     showToast('¡Cuenta creada con éxito! Ya podés buscar profesionales.');
     showSection('search');
     e.target.reset();
   } catch (err) {
     console.error(err);
+    currentUserCache = null;
     if (err.code === 'auth/email-already-in-use') {
       showToast('Ya existe una cuenta con ese email', 'error');
     } else if (err.code === 'auth/weak-password') {
@@ -922,6 +944,9 @@ async function registrarCliente(e) {
     } else {
       showToast(err.message || 'Error al registrarse', 'error');
     }
+  } finally {
+    authBusy = false;
+    updateNav();
   }
 }
 
@@ -942,12 +967,24 @@ async function registrarOficio(e) {
     return;
   }
 
+  const fechaNac = document.getElementById('oficioFechaNacimiento').value;
+  const edadCalc = calcularEdad(fechaNac);
+  if (!fechaNac || edadCalc === null) {
+    showToast('Ingresá una fecha de nacimiento válida', 'error');
+    return;
+  }
+  if (edadCalc < 18) {
+    showToast('Debés ser mayor de 18 años para registrarte como profesional', 'error');
+    return;
+  }
+
   const fotoInput = document.getElementById('oficioFotoPerfil');
   if (!oficioFotoPerfilDataUrl && (!fotoInput || !fotoInput.files || !fotoInput.files[0])) {
     showToast('La foto de perfil es obligatoria para profesionales', 'error');
     return;
   }
 
+  authBusy = true;
   try {
     // Verificar DNI único
     const dniSnap = await db.collection('users').where('dni', '==', dni).limit(1).get();
@@ -956,29 +993,25 @@ async function registrarOficio(e) {
       return;
     }
 
+    if (!oficioFotoPerfilDataUrl && fotoInput.files[0]) {
+      const file = fotoInput.files[0];
+      oficioFotoPerfilDataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+    if (!oficioFotoPerfilDataUrl) {
+      showToast('La foto de perfil es obligatoria para profesionales', 'error');
+      return;
+    }
+
     showToast('Creando cuenta profesional...');
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const uid = cred.user.uid;
 
-    let fotoPerfilUrl = '';
-    try {
-      if (!oficioFotoPerfilDataUrl && fotoInput.files[0]) {
-        const file = fotoInput.files[0];
-        oficioFotoPerfilDataUrl = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
-      }
-      fotoPerfilUrl = await uploadImage(`users/${uid}/perfil.jpg`, oficioFotoPerfilDataUrl);
-    } catch (upErr) {
-      console.error(upErr);
-      showToast('No se pudo subir la foto de perfil. Revisá Storage en Firebase.', 'error');
-      try { await cred.user.delete(); } catch (_) {}
-      return;
-    }
-
+    // Guardar perfil YA (así onAuthStateChanged encuentra el documento)
     const perfil = {
       tipo: 'oficio',
       nombre: document.getElementById('oficioNombre').value.trim(),
@@ -986,28 +1019,46 @@ async function registrarOficio(e) {
       telefono: document.getElementById('oficioTelefono').value.trim(),
       dni: dni,
       oficio: document.getElementById('oficioTipo').value,
-      experiencia: parseInt(document.getElementById('oficioExperiencia').value),
-      edad: parseInt(document.getElementById('oficioEdad').value),
+      experiencia: parseInt(document.getElementById('oficioExperiencia').value) || 0,
+      fechaNacimiento: document.getElementById('oficioFechaNacimiento').value,
+      edad: calcularEdad(document.getElementById('oficioFechaNacimiento').value),
       domicilio: document.getElementById('oficioDomicilio').value.trim(),
       localidad: document.getElementById('oficioLocalidad').value,
       provincia: document.getElementById('oficioProvincia').value,
-      descripcion: document.getElementById('oficioDescripcion').value.trim(),
-      fotoPerfil: fotoPerfilUrl,
+      descripcion: (document.getElementById('oficioDescripcion').value || '').trim(),
+      fotoPerfil: '',
       fotos: [],
       createdAt: new Date().toISOString()
     };
 
     await db.collection('users').doc(uid).set(perfil);
-    currentUserCache = { id: uid, ...perfil };
+    currentUserCache = { id: uid, ...perfil, email };
+    sessionStorage.setItem('oficiosya_uid', uid);
+    updateNav();
+
+    // Subir foto y actualizar perfil
+    try {
+      showToast('Subiendo foto de perfil...');
+      const fotoPerfilUrl = await uploadImage(`users/${uid}/perfil.jpg`, oficioFotoPerfilDataUrl);
+      await db.collection('users').doc(uid).update({ fotoPerfil: fotoPerfilUrl });
+      currentUserCache = { ...currentUserCache, fotoPerfil: fotoPerfilUrl };
+    } catch (upErr) {
+      console.error(upErr);
+      showToast('Cuenta creada, pero la foto no se subió. Podés cargarla en Mi Perfil.', 'error');
+    }
+
     oficioFotoPerfilDataUrl = null;
     updateNav();
-    showToast('¡Perfil profesional creado!');
-    showMyProfile();
+    showToast('¡Perfil profesional creado! Ya iniciaste sesión.');
+    await showMyProfile();
     e.target.reset();
     const prev = document.getElementById('oficioFotoPreview');
     if (prev) prev.innerHTML = '<i class="fas fa-user-circle"></i><span>Sin foto</span>';
   } catch (err) {
     console.error(err);
+    if (!currentUserCache) {
+      // solo limpiar si no llegó a crear perfil
+    }
     if (err.code === 'auth/email-already-in-use') {
       showToast('Ya existe una cuenta con ese email', 'error');
     } else if (err.code === 'auth/weak-password') {
@@ -1015,6 +1066,9 @@ async function registrarOficio(e) {
     } else {
       showToast(err.message || 'Error al registrarse', 'error');
     }
+  } finally {
+    authBusy = false;
+    updateNav();
   }
 }
 
@@ -1293,7 +1347,8 @@ async function verPerfil(profId) {
             <div class="prof-info-row"><span class="k"><i class="fas fa-city"></i> Localidad</span><span class="v">${prof.localidad || '—'}</span></div>
             <div class="prof-info-row"><span class="k"><i class="fas fa-flag"></i> Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
             <div class="prof-info-row"><span class="k"><i class="fas fa-phone"></i> Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
-            <div class="prof-info-row"><span class="k"><i class="fas fa-user"></i> Edad</span><span class="v">${prof.edad ? prof.edad + ' años' : '—'}</span></div>
+            <div class="prof-info-row"><span class="k"><i class="fas fa-birthday-cake"></i> Edad</span><span class="v">${(() => { const e = edadDesdePerfil(prof); return e !== null ? e + ' años' : '—'; })()}</span></div>
+            ${prof.fechaNacimiento ? `<div class="prof-info-row"><span class="k"><i class="fas fa-calendar-alt"></i> Nacimiento</span><span class="v">${formatFechaNacimiento(prof.fechaNacimiento)}</span></div>` : ''}
           </div>
           ${prof.descripcion ? `<div style="margin-top:1.2rem;"><h3><i class="fas fa-quote-left"></i> Sobre el profesional</h3><p class="prof-about">${prof.descripcion}</p></div>` : ''}
         </div>
@@ -1465,8 +1520,8 @@ async function showMyProfile() {
             <input type="tel" id="editTelefono" value="${prof.telefono}" required>
           </div>
           <div class="form-group">
-            <label>Edad</label>
-            <input type="number" id="editEdad" value="${prof.edad}" min="18" max="80" required>
+            <label>Fecha de nacimiento</label>
+            <input type="date" id="editFechaNacimiento" value="${prof.fechaNacimiento || ''}" required>
           </div>
         </div>
         <div class="form-row">
@@ -1542,6 +1597,17 @@ async function actualizarPerfil(e) {
     return;
   }
 
+  const fechaNacEdit = document.getElementById('editFechaNacimiento').value;
+  const edadCalcEdit = calcularEdad(fechaNacEdit);
+  if (!fechaNacEdit || edadCalcEdit === null) {
+    showToast('Ingresá una fecha de nacimiento válida', 'error');
+    return;
+  }
+  if (edadCalcEdit < 18) {
+    showToast('Debés ser mayor de 18 años', 'error');
+    return;
+  }
+
   try {
     const dniSnap = await db.collection('users').where('dni', '==', dni).get();
     if (dniSnap.docs.some(d => d.id !== user.id)) {
@@ -1555,7 +1621,8 @@ async function actualizarPerfil(e) {
       telefono: document.getElementById('editTelefono').value.trim(),
       oficio: document.getElementById('editOficio').value,
       experiencia: parseInt(document.getElementById('editExperiencia').value),
-      edad: parseInt(document.getElementById('editEdad').value),
+      fechaNacimiento: document.getElementById('editFechaNacimiento').value,
+      edad: calcularEdad(document.getElementById('editFechaNacimiento').value),
       domicilio: document.getElementById('editDomicilio').value.trim(),
       localidad: document.getElementById('editLocalidad').value,
       provincia: document.getElementById('editProvincia').value,
@@ -1848,6 +1915,50 @@ function formatDateTime(isoStr) {
   const d = new Date(isoStr);
   return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+/** Calcula edad a partir de YYYY-MM-DD */
+function calcularEdad(fechaNacimiento) {
+  if (!fechaNacimiento) return null;
+  const str = String(fechaNacimiento);
+  const nac = new Date(str.length <= 10 ? str + 'T12:00:00' : str);
+  if (isNaN(nac.getTime())) return null;
+  const hoy = new Date();
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+  return edad >= 0 ? edad : null;
+}
+
+function formatFechaNacimiento(fecha) {
+  if (!fecha) return '—';
+  const str = String(fecha);
+  const d = new Date(str.length <= 10 ? str + 'T12:00:00' : str);
+  if (isNaN(d.getTime())) return fecha;
+  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function edadDesdePerfil(prof) {
+  if (!prof) return null;
+  if (prof.fechaNacimiento) {
+    const e = calcularEdad(prof.fechaNacimiento);
+    if (e !== null) return e;
+  }
+  return typeof prof.edad === 'number' ? prof.edad : null;
+}
+
+window.calcularEdad = calcularEdad;
+
+function setMaxFechaNacimiento() {
+  const hoy = new Date();
+  const max = new Date(hoy.getFullYear() - 18, hoy.getMonth(), hoy.getDate());
+  const iso = max.toISOString().slice(0, 10);
+  ['oficioFechaNacimiento', 'editFechaNacimiento'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('max', iso);
+  });
+}
+
+
 
 // ===== PRESUPUESTOS =====
 let quoteFotosData = [];
