@@ -1,12 +1,13 @@
-// ===== DATA & STORAGE =====
-const STORAGE_KEYS = {
-  users: 'oficiosya_users',
-  currentUser: 'oficiosya_currentUser',
-  reviews: 'oficiosya_reviews',
-  notifications: 'oficiosya_notifications',
-  photos: 'oficiosya_photos',
-  quotes: 'oficiosya_quotes'
-};
+// ===== DATA & STORAGE (Firebase) =====
+// currentUser se mantiene en memoria + sessionStorage para la UI
+let currentUserCache = null;
+
+function requireFirebase() {
+  if (typeof firebaseReady === 'undefined' || !firebaseReady) {
+    showToast('Firebase no está configurado. Completá firebase-config.js', 'error');
+    throw new Error('Firebase no configurado');
+  }
+}
 
 // ===== PROVINCIAS Y LOCALIDADES (principales) =====
 const PROVINCIAS_LOCALIDADES = {
@@ -383,33 +384,8 @@ const DEMO_REVIEWS = [
 ];
 
 // ===== INIT =====
-function init() {
-  // Cargar datos demo si no existen
-  let users = getUsers();
-  if (users.length === 0) {
-    users = [...DEMO_PROFESIONALES];
-    saveUsers(users);
-  } else {
-    // Migrar posibles "CABA" antiguos a nombre completo
-    let changed = false;
-    users.forEach(u => {
-      if (u.provincia === 'CABA') {
-        u.provincia = 'Ciudad Autónoma de Buenos Aires';
-        changed = true;
-      }
-    });
-    if (changed) saveUsers(users);
-  }
-
-  let reviews = getReviews();
-  if (reviews.length === 0) {
-    reviews = [...DEMO_REVIEWS];
-    saveReviews(reviews);
-  }
-
-  // Si los selects de provincia ya tienen opciones en el HTML, no los pisamos
+async function init() {
   poblarSelectsProvincias();
-  // Listeners de respaldo por si el onchange del HTML no dispara
   [
     ['filterProvincia', 'filterLocalidad'],
     ['clienteProvincia', 'clienteLocalidad'],
@@ -420,9 +396,44 @@ function init() {
       el.addEventListener('change', () => cargarLocalidades(provId, locId));
     }
   });
-  updateNav();
-  showSection('home');
   setupRatingStars();
+  showSection('home');
+
+  if (typeof firebaseReady === 'undefined' || !firebaseReady) {
+    console.warn('Firebase no configurado — la app no persistirá datos en la nube.');
+    showToast('Configurá Firebase (firebase-config.js) para guardar datos en la nube', 'error');
+    updateNav();
+    return;
+  }
+
+  // Sesión persistente de Firebase Auth
+  auth.onAuthStateChanged(async (firebaseUser) => {
+    if (firebaseUser) {
+      try {
+        const profile = await loadUserProfile(firebaseUser.uid);
+        if (profile) {
+          currentUserCache = { ...profile, id: firebaseUser.uid, email: firebaseUser.email };
+          sessionStorage.setItem('oficiosya_uid', firebaseUser.uid);
+        } else {
+          currentUserCache = null;
+        }
+      } catch (err) {
+        console.error(err);
+        currentUserCache = null;
+      }
+    } else {
+      currentUserCache = null;
+      sessionStorage.removeItem('oficiosya_uid');
+    }
+    updateNav();
+  });
+
+  // Sembrar profesionales demo solo si no hay ninguno
+  try {
+    await seedDemoIfEmpty();
+  } catch (e) {
+    console.warn('No se pudieron cargar demos:', e);
+  }
 }
 
 // ===== PROVINCIAS / LOCALIDADES DINÁMICAS =====
@@ -502,49 +513,117 @@ function cargarLocalidades(provinciaSelectId, localidadSelectId, selectedLocalid
 // Exponer en window por si se llama desde HTML
 window.cargarLocalidades = cargarLocalidades;
 
-// ===== STORAGE HELPERS =====
-function getUsers() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || '[]');
-}
-
-function saveUsers(users) {
-  localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
-}
-
+// ===== FIRESTORE HELPERS =====
 function getCurrentUser() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.currentUser) || 'null');
+  return currentUserCache;
 }
 
 function setCurrentUser(user) {
-  localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
+  currentUserCache = user;
 }
 
-function getReviews() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.reviews) || '[]');
+async function loadUserProfile(uid) {
+  const doc = await db.collection('users').doc(uid).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
 }
 
-function saveReviews(reviews) {
-  localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify(reviews));
+async function getUsers() {
+  requireFirebase();
+  const snap = await db.collection('users').get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-function getNotifications(userId) {
-  const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.notifications) || '{}');
-  return all[userId] || [];
+async function getProfesionales() {
+  requireFirebase();
+  const snap = await db.collection('users').where('tipo', '==', 'oficio').get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-function saveNotification(userId, notif) {
-  const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.notifications) || '{}');
-  if (!all[userId]) all[userId] = [];
-  all[userId].unshift(notif);
-  localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(all));
+async function getReviews() {
+  requireFirebase();
+  const snap = await db.collection('reviews').get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-function markNotificationsRead(userId) {
-  const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.notifications) || '{}');
-  if (all[userId]) {
-    all[userId].forEach(n => n.read = true);
-    localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(all));
-  }
+async function getReviewsByProf(profId) {
+  requireFirebase();
+  const snap = await db.collection('reviews').where('profId', '==', profId).get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function getNotifications(userId) {
+  requireFirebase();
+  const snap = await db.collection('notifications')
+    .where('userId', '==', userId)
+    .orderBy('fecha', 'desc')
+    .limit(50)
+    .get()
+    .catch(async () => {
+      // Si falta índice compuesto, traer sin orderBy
+      const s = await db.collection('notifications').where('userId', '==', userId).get();
+      return s;
+    });
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  return list;
+}
+
+async function saveNotification(userId, notif) {
+  requireFirebase();
+  await db.collection('notifications').add({
+    ...notif,
+    userId,
+    fecha: notif.fecha || new Date().toISOString(),
+    read: false
+  });
+}
+
+async function markNotificationsRead(userId) {
+  requireFirebase();
+  const snap = await db.collection('notifications')
+    .where('userId', '==', userId)
+    .where('read', '==', false)
+    .get()
+    .catch(async () => db.collection('notifications').where('userId', '==', userId).get());
+  const batch = db.batch();
+  snap.docs.forEach(d => {
+    if (d.data().read === false || d.data().read === undefined) {
+      batch.update(d.ref, { read: true });
+    }
+  });
+  await batch.commit();
+}
+
+async function getQuotes() {
+  requireFirebase();
+  const snap = await db.collection('quotes').get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function uploadImage(path, dataUrl) {
+  requireFirebase();
+  const ref = storage.ref().child(path);
+  await ref.putString(dataUrl, 'data_url');
+  return await ref.getDownloadURL();
+}
+
+async function seedDemoIfEmpty() {
+  const snap = await db.collection('users').where('tipo', '==', 'oficio').limit(1).get();
+  if (!snap.empty) return;
+
+  const batch = db.batch();
+  DEMO_PROFESIONALES.forEach(p => {
+    const { password, ...rest } = p;
+    const ref = db.collection('users').doc(p.id);
+    batch.set(ref, { ...rest, demo: true, createdAt: new Date().toISOString() });
+  });
+  DEMO_REVIEWS.forEach(r => {
+    const ref = db.collection('reviews').doc(r.id);
+    batch.set(ref, r);
+  });
+  await batch.commit();
+  console.log('Datos demo cargados en Firestore');
 }
 
 // ===== NAV & SECTIONS =====
@@ -677,28 +756,29 @@ function abrirEditarPerfil() {
   showSection('editAccount');
 }
 
-function guardarCuenta(e) {
+async function guardarCuenta(e) {
   e.preventDefault();
   const user = getCurrentUser();
   if (!user) return;
 
-  const users = getUsers();
-  const idx = users.findIndex(u => u.id === user.id);
-  if (idx === -1) return;
-
-  users[idx].nombre = document.getElementById('accNombre').value.trim();
-  users[idx].telefono = document.getElementById('accTelefono').value.trim();
-
-  if (user.tipo === 'cliente') {
-    users[idx].provincia = document.getElementById('accProvincia').value;
-    users[idx].localidad = document.getElementById('accLocalidad').value;
+  try {
+    const data = {
+      nombre: document.getElementById('accNombre').value.trim(),
+      telefono: document.getElementById('accTelefono').value.trim()
+    };
+    if (user.tipo === 'cliente') {
+      data.provincia = document.getElementById('accProvincia').value;
+      data.localidad = document.getElementById('accLocalidad').value;
+    }
+    await db.collection('users').doc(user.id).update(data);
+    currentUserCache = { ...user, ...data };
+    updateNav();
+    showToast('Perfil actualizado correctamente');
+    showSection('home');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar el perfil', 'error');
   }
-
-  saveUsers(users);
-  setCurrentUser(users[idx]);
-  updateNav();
-  showToast('Perfil actualizado correctamente');
-  showSection('home');
 }
 
 // Cerrar menú al hacer clic fuera
@@ -713,19 +793,23 @@ window.closeUserMenu = closeUserMenu;
 window.abrirEditarPerfil = abrirEditarPerfil;
 window.guardarCuenta = guardarCuenta;
 
-function updateNotifBadge() {
+async function updateNotifBadge() {
   const user = getCurrentUser();
-  if (!user || user.tipo !== 'oficio') return;
-  
-  const notifs = getNotifications(user.id);
-  const unread = notifs.filter(n => !n.read).length;
-  const badge = document.getElementById('notifBadge');
-  
-  if (unread > 0) {
-    badge.style.display = 'flex';
-    badge.textContent = unread > 9 ? '9+' : unread;
-  } else {
-    badge.style.display = 'none';
+  if (!user || user.tipo !== 'oficio' || !firebaseReady) return;
+
+  try {
+    const notifs = await getNotifications(user.id);
+    const unread = notifs.filter(n => !n.read).length;
+    const badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    if (unread > 0) {
+      badge.style.display = 'flex';
+      badge.textContent = unread > 9 ? '9+' : unread;
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) {
+    console.warn(e);
   }
 }
 
@@ -753,118 +837,158 @@ function switchRegisterTab(tipo) {
   }
 }
 
-function registrarCliente(e) {
+async function registrarCliente(e) {
   e.preventDefault();
-  
-  const email = document.getElementById('clienteEmail').value.trim().toLowerCase();
-  const users = getUsers();
-  
-  if (users.find(u => u.email === email)) {
-    showToast('Ya existe una cuenta con ese email', 'error');
+  try {
+    requireFirebase();
+  } catch (err) {
     return;
   }
-  
-  const nuevo = {
-    id: 'u_' + Date.now(),
-    tipo: 'cliente',
-    nombre: document.getElementById('clienteNombre').value.trim(),
-    email: email,
-    password: document.getElementById('clientePass').value,
-    telefono: document.getElementById('clienteTelefono').value.trim(),
-    localidad: document.getElementById('clienteLocalidad').value,
-    provincia: document.getElementById('clienteProvincia').value
-  };
-  
-  users.push(nuevo);
-  saveUsers(users);
-  setCurrentUser(nuevo);
-  updateNav();
-  showToast('¡Cuenta creada con éxito! Ya podés buscar profesionales.');
-  showSection('search');
-  
-  // Limpiar form
-  e.target.reset();
+
+  const email = document.getElementById('clienteEmail').value.trim().toLowerCase();
+  const password = document.getElementById('clientePass').value;
+
+  try {
+    showToast('Creando cuenta...');
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+
+    const perfil = {
+      tipo: 'cliente',
+      nombre: document.getElementById('clienteNombre').value.trim(),
+      email: email,
+      telefono: document.getElementById('clienteTelefono').value.trim(),
+      localidad: document.getElementById('clienteLocalidad').value,
+      provincia: document.getElementById('clienteProvincia').value,
+      createdAt: new Date().toISOString()
+    };
+
+    await db.collection('users').doc(uid).set(perfil);
+    currentUserCache = { id: uid, ...perfil };
+    updateNav();
+    showToast('¡Cuenta creada con éxito! Ya podés buscar profesionales.');
+    showSection('search');
+    e.target.reset();
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'auth/email-already-in-use') {
+      showToast('Ya existe una cuenta con ese email', 'error');
+    } else if (err.code === 'auth/weak-password') {
+      showToast('La contraseña debe tener al menos 6 caracteres', 'error');
+    } else {
+      showToast(err.message || 'Error al registrarse', 'error');
+    }
+  }
 }
 
-function registrarOficio(e) {
+async function registrarOficio(e) {
   e.preventDefault();
-  
-  const email = document.getElementById('oficioEmail').value.trim().toLowerCase();
-  const users = getUsers();
-  
-  if (users.find(u => u.email === email)) {
-    showToast('Ya existe una cuenta con ese email', 'error');
+  try {
+    requireFirebase();
+  } catch (err) {
     return;
   }
 
+  const email = document.getElementById('oficioEmail').value.trim().toLowerCase();
+  const password = document.getElementById('oficioPass').value;
   const dni = document.getElementById('oficioDni').value.trim().replace(/\D/g, '');
+
   if (dni.length < 7 || dni.length > 8) {
     showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
     return;
   }
-  if (users.find(u => u.dni === dni)) {
-    showToast('Ya existe un profesional registrado con ese DNI', 'error');
-    return;
+
+  try {
+    // Verificar DNI único
+    const dniSnap = await db.collection('users').where('dni', '==', dni).limit(1).get();
+    if (!dniSnap.empty) {
+      showToast('Ya existe un profesional registrado con ese DNI', 'error');
+      return;
+    }
+
+    showToast('Creando cuenta profesional...');
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+
+    const perfil = {
+      tipo: 'oficio',
+      nombre: document.getElementById('oficioNombre').value.trim(),
+      email: email,
+      telefono: document.getElementById('oficioTelefono').value.trim(),
+      dni: dni,
+      oficio: document.getElementById('oficioTipo').value,
+      experiencia: parseInt(document.getElementById('oficioExperiencia').value),
+      edad: parseInt(document.getElementById('oficioEdad').value),
+      domicilio: document.getElementById('oficioDomicilio').value.trim(),
+      localidad: document.getElementById('oficioLocalidad').value,
+      provincia: document.getElementById('oficioProvincia').value,
+      descripcion: document.getElementById('oficioDescripcion').value.trim(),
+      fotos: [],
+      createdAt: new Date().toISOString()
+    };
+
+    await db.collection('users').doc(uid).set(perfil);
+    currentUserCache = { id: uid, ...perfil };
+    updateNav();
+    showToast('¡Perfil profesional creado! Completá tu perfil y agregá fotos de tus trabajos.');
+    showMyProfile();
+    e.target.reset();
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'auth/email-already-in-use') {
+      showToast('Ya existe una cuenta con ese email', 'error');
+    } else if (err.code === 'auth/weak-password') {
+      showToast('La contraseña debe tener al menos 6 caracteres', 'error');
+    } else {
+      showToast(err.message || 'Error al registrarse', 'error');
+    }
   }
-  
-  const nuevo = {
-    id: 'u_' + Date.now(),
-    tipo: 'oficio',
-    nombre: document.getElementById('oficioNombre').value.trim(),
-    email: email,
-    password: document.getElementById('oficioPass').value,
-    telefono: document.getElementById('oficioTelefono').value.trim(),
-    dni: dni,
-    oficio: document.getElementById('oficioTipo').value,
-    experiencia: parseInt(document.getElementById('oficioExperiencia').value),
-    edad: parseInt(document.getElementById('oficioEdad').value),
-    domicilio: document.getElementById('oficioDomicilio').value.trim(),
-    localidad: document.getElementById('oficioLocalidad').value,
-    provincia: document.getElementById('oficioProvincia').value,
-    descripcion: document.getElementById('oficioDescripcion').value.trim(),
-    fotos: []
-  };
-  
-  users.push(nuevo);
-  saveUsers(users);
-  setCurrentUser(nuevo);
-  updateNav();
-  showToast('¡Perfil profesional creado! Completá tu perfil y agregá fotos de tus trabajos.');
-  showMyProfile();
-  
-  e.target.reset();
 }
 
 // ===== LOGIN / LOGOUT =====
-function iniciarSesion(e) {
+async function iniciarSesion(e) {
   e.preventDefault();
-  
-  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  const pass = document.getElementById('loginPass').value;
-  
-  const users = getUsers();
-  const user = users.find(u => u.email === email && u.password === pass);
-  
-  if (!user) {
-    showToast('Email o contraseña incorrectos', 'error');
+  try {
+    requireFirebase();
+  } catch (err) {
     return;
   }
-  
-  setCurrentUser(user);
-  updateNav();
-  showToast(`¡Bienvenido/a, ${user.nombre.split(' ')[0]}!`);
-  
-  if (user.tipo === 'oficio') {
-    showMyProfile();
-  } else {
-    showSection('search');
+
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value;
+
+  try {
+    showToast('Ingresando...');
+    const cred = await auth.signInWithEmailAndPassword(email, pass);
+    const profile = await loadUserProfile(cred.user.uid);
+    if (!profile) {
+      showToast('No se encontró el perfil de usuario', 'error');
+      await auth.signOut();
+      return;
+    }
+    currentUserCache = { id: cred.user.uid, ...profile, email: cred.user.email };
+    updateNav();
+    showToast(`¡Bienvenido/a, ${currentUserCache.nombre.split(' ')[0]}!`);
+    if (currentUserCache.tipo === 'oficio') {
+      showMyProfile();
+    } else {
+      showSection('search');
+    }
+    e.target.reset();
+  } catch (err) {
+    console.error(err);
+    showToast('Email o contraseña incorrectos', 'error');
   }
-  
-  e.target.reset();
 }
 
-function logout() {
-  localStorage.removeItem(STORAGE_KEYS.currentUser);
+async function logout() {
+  closeUserMenu();
+  try {
+    if (firebaseReady) await auth.signOut();
+  } catch (e) {
+    console.error(e);
+  }
+  currentUserCache = null;
   updateNav();
   showToast('Sesión cerrada correctamente');
   showSection('home');
@@ -879,81 +1003,98 @@ function quickSearch(oficio) {
   realizarBusqueda();
 }
 
-function realizarBusqueda() {
+async function realizarBusqueda() {
   const oficio = document.getElementById('filterOficio').value;
   const localidad = document.getElementById('filterLocalidad').value;
   const provincia = document.getElementById('filterProvincia').value;
-  
-  const users = getUsers().filter(u => u.tipo === 'oficio');
-  
-  let resultados = users.filter(u => {
-    if (oficio && u.oficio !== oficio) return false;
-    if (provincia && u.provincia !== provincia) return false;
-    if (localidad && u.localidad !== localidad && !u.domicilio.toLowerCase().includes(localidad.toLowerCase())) return false;
-    return true;
-  });
-  
   const container = document.getElementById('resultados');
   const noRes = document.getElementById('noResultados');
-  
-  if (resultados.length === 0) {
+
+  if (!firebaseReady) {
     container.innerHTML = '';
     noRes.style.display = 'block';
+    noRes.innerHTML = '<p>Configurá Firebase para buscar profesionales.</p>';
     return;
   }
-  
+
+  container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:2rem;">Buscando...</p>';
   noRes.style.display = 'none';
-  
-  container.innerHTML = resultados.map(p => {
-    const avg = getAverageRating(p.id);
-    const starsHtml = renderStars(avg.promedio);
-    const iniciales = p.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-    
-    return `
-      <div class="prof-card">
-        <div class="prof-header">
-          <div class="prof-avatar">${iniciales}</div>
-          <div class="prof-header-info">
-            <h3>${p.nombre}</h3>
-            <span class="oficio-tag">${p.oficio}</span>
+
+  try {
+    let users = await getProfesionales();
+
+    let resultados = users.filter(u => {
+      if (oficio && u.oficio !== oficio) return false;
+      if (provincia && u.provincia !== provincia) return false;
+      if (localidad && u.localidad !== localidad && !(u.domicilio || '').toLowerCase().includes(localidad.toLowerCase())) return false;
+      return true;
+    });
+
+    if (resultados.length === 0) {
+      container.innerHTML = '';
+      noRes.style.display = 'block';
+      noRes.innerHTML = '<i class="fas fa-search"></i><p>No se encontraron profesionales con esos filtros.</p>';
+      return;
+    }
+
+    noRes.style.display = 'none';
+    const allReviews = await getReviews();
+
+    container.innerHTML = resultados.map(p => {
+      const avg = getAverageRatingFromList(allReviews, p.id);
+      const starsHtml = renderStars(avg.promedio);
+      const iniciales = (p.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+      return `
+        <div class="prof-card">
+          <div class="prof-header">
+            <div class="prof-avatar">${iniciales}</div>
+            <div class="prof-header-info">
+              <h3>${p.nombre}</h3>
+              <span class="oficio-tag">${p.oficio}</span>
+            </div>
+          </div>
+          <div class="prof-body">
+            <div class="prof-meta">
+              <span><i class="fas fa-map-marker-alt"></i> ${p.localidad}, ${p.provincia}</span>
+              <span><i class="fas fa-briefcase"></i> ${p.experiencia || 0} años exp.</span>
+            </div>
+            <div class="prof-rating">
+              ${starsHtml}
+              <span style="color:var(--text-light);font-size:0.9rem;">(${avg.count} reseñas)</span>
+            </div>
+            <p style="font-size:0.9rem;color:var(--text-light);">${p.descripcion ? p.descripcion.substring(0, 100) + (p.descripcion.length > 100 ? '...' : '') : 'Sin descripción'}</p>
+          </div>
+          <div class="prof-actions">
+            <button class="btn btn-primary btn-sm" onclick="verPerfil('${p.id}')">
+              <i class="fas fa-user"></i> Ver perfil
+            </button>
+            <a href="tel:${p.telefono}" class="btn btn-secondary btn-sm">
+              <i class="fas fa-phone"></i> Llamar
+            </a>
           </div>
         </div>
-        <div class="prof-body">
-          <div class="prof-meta">
-            <span><i class="fas fa-map-marker-alt"></i> ${p.localidad}, ${p.provincia}</span>
-            <span><i class="fas fa-briefcase"></i> ${p.experiencia} años exp.</span>
-          </div>
-          <div class="prof-rating">
-            ${starsHtml}
-            <span style="color:var(--text-light);font-size:0.9rem;">(${avg.count} reseñas)</span>
-          </div>
-          <p style="font-size:0.9rem;color:var(--text-light);">${p.descripcion ? p.descripcion.substring(0, 100) + (p.descripcion.length > 100 ? '...' : '') : 'Sin descripción'}</p>
-        </div>
-        <div class="prof-actions">
-          <button class="btn btn-primary btn-sm" onclick="verPerfil('${p.id}')">
-            <i class="fas fa-user"></i> Ver perfil
-          </button>
-          <a href="tel:${p.telefono}" class="btn btn-secondary btn-sm">
-            <i class="fas fa-phone"></i> Llamar
-          </a>
-        </div>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '';
+    noRes.style.display = 'block';
+    noRes.innerHTML = '<p>Error al buscar. Revisá la configuración de Firebase.</p>';
+  }
 }
 
 // ===== RATINGS =====
-function getAverageRating(profId) {
-  const reviews = getReviews().filter(r => r.profId === profId);
+function getAverageRatingFromList(reviewsAll, profId) {
+  const reviews = reviewsAll.filter(r => r.profId === profId);
   if (reviews.length === 0) return { promedio: 0, count: 0, calidad: 0, tiempo: 0, precio: 0 };
-  
+
   const sumCalidad = reviews.reduce((a, r) => a + r.calidad, 0);
   const sumTiempo = reviews.reduce((a, r) => a + r.tiempo, 0);
   const sumPrecio = reviews.reduce((a, r) => a + r.precio, 0);
   const total = reviews.length;
-  
   const promedio = ((sumCalidad + sumTiempo + sumPrecio) / (total * 3)).toFixed(1);
-  
+
   return {
     promedio: parseFloat(promedio),
     count: total,
@@ -961,6 +1102,11 @@ function getAverageRating(profId) {
     tiempo: (sumTiempo / total).toFixed(1),
     precio: (sumPrecio / total).toFixed(1)
   };
+}
+
+async function getAverageRating(profId) {
+  const reviews = await getReviewsByProf(profId);
+  return getAverageRatingFromList(reviews, profId);
 }
 
 function renderStars(rating) {
@@ -982,17 +1128,24 @@ function renderStars(rating) {
 }
 
 // ===== PROFILE VIEW =====
-function verPerfil(profId) {
-  const users = getUsers();
-  const prof = users.find(u => u.id === profId);
-  if (!prof) {
-    showToast('Profesional no encontrado', 'error');
+async function verPerfil(profId) {
+  let prof;
+  try {
+    const doc = await db.collection('users').doc(profId).get();
+    if (!doc.exists) {
+      showToast('Profesional no encontrado', 'error');
+      return;
+    }
+    prof = { id: doc.id, ...doc.data() };
+  } catch (err) {
+    console.error(err);
+    showToast('Error al cargar el perfil', 'error');
     return;
   }
-  
-  const avg = getAverageRating(profId);
-  const reviews = getReviews().filter(r => r.profId === profId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  const iniciales = prof.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+  const reviews = (await getReviewsByProf(profId)).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  const avg = getAverageRatingFromList(reviews, profId);
+  const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   const currentUser = getCurrentUser();
   const puedeResenar = currentUser && currentUser.tipo === 'cliente';
   
@@ -1111,21 +1264,31 @@ function verPerfil(profId) {
 }
 
 // ===== MY PROFILE (profesional logueado) =====
-function showMyProfile() {
+async function showMyProfile() {
   const user = getCurrentUser();
   if (!user || user.tipo !== 'oficio') {
     showSection('home');
     return;
   }
-  
-  // Refrescar datos del usuario
-  const users = getUsers();
-  const prof = users.find(u => u.id === user.id);
-  if (!prof) return;
-  
-  const avg = getAverageRating(prof.id);
-  const reviews = getReviews().filter(r => r.profId === prof.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  const iniciales = prof.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+  let prof;
+  try {
+    const doc = await db.collection('users').doc(user.id).get();
+    if (!doc.exists) {
+      showToast('No se pudo cargar tu perfil', 'error');
+      return;
+    }
+    prof = { id: doc.id, ...doc.data() };
+    currentUserCache = { ...prof, email: user.email };
+  } catch (err) {
+    console.error(err);
+    showToast('Error al cargar el perfil', 'error');
+    return;
+  }
+
+  const reviews = (await getReviewsByProf(prof.id)).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  const avg = getAverageRatingFromList(reviews, prof.id);
+  const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   
   let fotosHtml = '';
   if (prof.fotos && prof.fotos.length > 0) {
@@ -1268,91 +1431,109 @@ function showMyProfile() {
   showSection('myProfile');
 }
 
-function actualizarPerfil(e) {
+async function actualizarPerfil(e) {
   e.preventDefault();
   const user = getCurrentUser();
   if (!user) return;
-  
-  const users = getUsers();
-  const idx = users.findIndex(u => u.id === user.id);
-  if (idx === -1) return;
-  
+
   const dni = document.getElementById('editDni').value.trim().replace(/\D/g, '');
   if (dni.length < 7 || dni.length > 8) {
     showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
     return;
   }
-  // Evitar DNI duplicado de otro usuario
-  if (users.find(u => u.dni === dni && u.id !== user.id)) {
-    showToast('Ya existe otro profesional con ese DNI', 'error');
-    return;
-  }
 
-  users[idx].nombre = document.getElementById('editNombre').value.trim();
-  users[idx].dni = dni;
-  users[idx].telefono = document.getElementById('editTelefono').value.trim();
-  users[idx].oficio = document.getElementById('editOficio').value;
-  users[idx].experiencia = parseInt(document.getElementById('editExperiencia').value);
-  users[idx].edad = parseInt(document.getElementById('editEdad').value);
-  users[idx].domicilio = document.getElementById('editDomicilio').value.trim();
-  users[idx].localidad = document.getElementById('editLocalidad').value;
-  users[idx].provincia = document.getElementById('editProvincia').value;
-  users[idx].descripcion = document.getElementById('editDescripcion').value.trim();
-  
-  saveUsers(users);
-  setCurrentUser(users[idx]);
-  showToast('Perfil actualizado correctamente');
-  showMyProfile();
+  try {
+    const dniSnap = await db.collection('users').where('dni', '==', dni).get();
+    if (dniSnap.docs.some(d => d.id !== user.id)) {
+      showToast('Ya existe otro profesional con ese DNI', 'error');
+      return;
+    }
+
+    const data = {
+      nombre: document.getElementById('editNombre').value.trim(),
+      dni: dni,
+      telefono: document.getElementById('editTelefono').value.trim(),
+      oficio: document.getElementById('editOficio').value,
+      experiencia: parseInt(document.getElementById('editExperiencia').value),
+      edad: parseInt(document.getElementById('editEdad').value),
+      domicilio: document.getElementById('editDomicilio').value.trim(),
+      localidad: document.getElementById('editLocalidad').value,
+      provincia: document.getElementById('editProvincia').value,
+      descripcion: document.getElementById('editDescripcion').value.trim()
+    };
+
+    await db.collection('users').doc(user.id).update(data);
+    currentUserCache = { ...user, ...data };
+    showToast('Perfil actualizado correctamente');
+    showMyProfile();
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar el perfil', 'error');
+  }
 }
 
-function subirFoto(e) {
+async function subirFoto(e) {
   const file = e.target.files[0];
   if (!file) return;
-  
+
   if (!file.type.startsWith('image/')) {
     showToast('Solo se permiten imágenes', 'error');
     return;
   }
-  
-  // Limitar tamaño a ~2MB
   if (file.size > 2 * 1024 * 1024) {
     showToast('La imagen es muy grande (máx 2MB)', 'error');
     return;
   }
-  
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    const user = getCurrentUser();
-    const users = getUsers();
-    const idx = users.findIndex(u => u.id === user.id);
-    if (idx === -1) return;
-    
-    if (!users[idx].fotos) users[idx].fotos = [];
-    if (users[idx].fotos.length >= 8) {
+
+  const user = getCurrentUser();
+  if (!user) return;
+
+  try {
+    const doc = await db.collection('users').doc(user.id).get();
+    const fotos = (doc.data().fotos || []).slice();
+    if (fotos.length >= 8) {
       showToast('Máximo 8 fotos por perfil', 'error');
       return;
     }
-    
-    users[idx].fotos.push(ev.target.result);
-    saveUsers(users);
-    setCurrentUser(users[idx]);
-    showToast('Foto agregada correctamente');
-    showMyProfile();
-  };
-  reader.readAsDataURL(file);
+
+    showToast('Subiendo foto...');
+    const reader = new FileReader();
+    reader.onload = async function (ev) {
+      try {
+        const url = await uploadImage(`users/${user.id}/fotos/${Date.now()}.jpg`, ev.target.result);
+        fotos.push(url);
+        await db.collection('users').doc(user.id).update({ fotos });
+        currentUserCache = { ...user, fotos };
+        showToast('Foto agregada correctamente');
+        showMyProfile();
+      } catch (err) {
+        console.error(err);
+        showToast('Error al subir la foto (revisá Storage en Firebase)', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch (err) {
+    console.error(err);
+    showToast('Error al subir la foto', 'error');
+  }
 }
 
-function eliminarFoto(index) {
+async function eliminarFoto(index) {
   const user = getCurrentUser();
-  const users = getUsers();
-  const idx = users.findIndex(u => u.id === user.id);
-  if (idx === -1) return;
-  
-  users[idx].fotos.splice(index, 1);
-  saveUsers(users);
-  setCurrentUser(users[idx]);
-  showToast('Foto eliminada');
-  showMyProfile();
+  if (!user) return;
+
+  try {
+    const doc = await db.collection('users').doc(user.id).get();
+    const fotos = (doc.data().fotos || []).slice();
+    fotos.splice(index, 1);
+    await db.collection('users').doc(user.id).update({ fotos });
+    currentUserCache = { ...user, fotos };
+    showToast('Foto eliminada');
+    showMyProfile();
+  } catch (err) {
+    console.error(err);
+    showToast('Error al eliminar la foto', 'error');
+  }
 }
 
 // ===== REVIEWS =====
@@ -1420,85 +1601,86 @@ function cerrarModal() {
   document.getElementById('reviewModal').classList.remove('active');
 }
 
-function enviarResena(e) {
+async function enviarResena(e) {
   e.preventDefault();
-  
+
   const user = getCurrentUser();
   if (!user || user.tipo !== 'cliente') return;
-  
+
   if (currentRatings.calidad === 0 || currentRatings.tiempo === 0 || currentRatings.precio === 0) {
     showToast('Por favor calificá las tres categorías', 'error');
     return;
   }
-  
+
   const profId = document.getElementById('reviewProfId').value;
   const comentario = document.getElementById('reviewComentario').value.trim();
-  
-  const reviews = getReviews();
-  
-  // Evitar reseñas duplicadas del mismo cliente al mismo prof
-  const yaReseno = reviews.find(r => r.profId === profId && r.clienteId === user.id);
-  if (yaReseno) {
-    showToast('Ya dejaste una reseña para este profesional', 'error');
-    return;
+
+  try {
+    const existentes = await getReviewsByProf(profId);
+    if (existentes.find(r => r.clienteId === user.id)) {
+      showToast('Ya dejaste una reseña para este profesional', 'error');
+      return;
+    }
+
+    const nueva = {
+      profId: profId,
+      clienteId: user.id,
+      clienteNombre: user.nombre,
+      calidad: currentRatings.calidad,
+      tiempo: currentRatings.tiempo,
+      precio: currentRatings.precio,
+      comentario: comentario,
+      fecha: new Date().toISOString().split('T')[0]
+    };
+
+    await db.collection('reviews').add(nueva);
+
+    await saveNotification(profId, {
+      tipo: 'resena',
+      mensaje: `${user.nombre} te dejó una reseña y valoración.`,
+      detalle: `"${comentario.substring(0, 60)}${comentario.length > 60 ? '...' : ''}" — Calidad: ${currentRatings.calidad}★, Tiempo: ${currentRatings.tiempo}★, Precio: ${currentRatings.precio}★`
+    });
+
+    cerrarModal();
+    showToast('¡Reseña enviada con éxito!');
+    verPerfil(profId);
+  } catch (err) {
+    console.error(err);
+    showToast('Error al enviar la reseña', 'error');
   }
-  
-  const nueva = {
-    id: 'r_' + Date.now(),
-    profId: profId,
-    clienteId: user.id,
-    clienteNombre: user.nombre,
-    calidad: currentRatings.calidad,
-    tiempo: currentRatings.tiempo,
-    precio: currentRatings.precio,
-    comentario: comentario,
-    fecha: new Date().toISOString().split('T')[0]
-  };
-  
-  reviews.push(nueva);
-  saveReviews(reviews);
-  
-  // Crear notificación para el profesional
-  const notif = {
-    id: 'n_' + Date.now(),
-    tipo: 'resena',
-    mensaje: `${user.nombre} te dejó una reseña y valoración.`,
-    detalle: `"${comentario.substring(0, 60)}${comentario.length > 60 ? '...' : ''}" — Calidad: ${currentRatings.calidad}★, Tiempo: ${currentRatings.tiempo}★, Precio: ${currentRatings.precio}★`,
-    fecha: new Date().toISOString(),
-    read: false
-  };
-  saveNotification(profId, notif);
-  
-  cerrarModal();
-  showToast('¡Reseña enviada con éxito!');
-  verPerfil(profId);
 }
 
 // ===== NOTIFICATIONS =====
-function showNotifications() {
+async function showNotifications() {
   const user = getCurrentUser();
   if (!user || user.tipo !== 'oficio') return;
-  
-  const notifs = getNotifications(user.id);
-  markNotificationsRead(user.id);
-  updateNotifBadge();
-  
+
   const container = document.getElementById('notificationsList');
-  
-  if (notifs.length === 0) {
-    container.innerHTML = `
-      <div class="empty-notifs">
-        <i class="fas fa-bell-slash"></i>
-        <p>No tenés notificaciones todavía.</p>
-        <p style="font-size:0.9rem;">Te avisaremos cuando dejen una reseña o te pidan un presupuesto.</p>
-      </div>
-    `;
-  } else {
+  container.innerHTML = '<p style="text-align:center;color:var(--text-light);">Cargando...</p>';
+  showSection('notifications');
+
+  try {
+    const notifs = await getNotifications(user.id);
+    await markNotificationsRead(user.id);
+    updateNotifBadge();
+
+    if (notifs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-notifs">
+          <i class="fas fa-bell-slash"></i>
+          <p>No tenés notificaciones todavía.</p>
+          <p style="font-size:0.9rem;">Te avisaremos cuando dejen una reseña o te pidan un presupuesto.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const quotes = await getQuotes();
     container.innerHTML = notifs.map(n => {
       const icon = n.tipo === 'presupuesto' ? 'fa-file-invoice-dollar' : 'fa-star';
       let extra = '';
       if (n.tipo === 'presupuesto' && n.quoteId) {
-        const q = getQuotes().find(x => x.id === n.quoteId);
+        const q = quotes.find(x => x.id === n.quoteId);
         if (q) {
           const fotos = (q.fotos || []).map(f => `<img src="${f}" alt="foto" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;">`).join('');
           extra = `
@@ -1521,9 +1703,10 @@ function showNotifications() {
         </div>
       `;
     }).join('');
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<p style="text-align:center;color:var(--text-light);">Error al cargar notificaciones.</p>';
   }
-  
-  showSection('notifications');
 }
 
 // ===== UTILS =====
@@ -1539,14 +1722,6 @@ function formatDateTime(isoStr) {
 
 // ===== PRESUPUESTOS =====
 let quoteFotosData = [];
-
-function getQuotes() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.quotes) || '[]');
-}
-
-function saveQuotes(quotes) {
-  localStorage.setItem(STORAGE_KEYS.quotes, JSON.stringify(quotes));
-}
 
 function abrirModalPresupuesto(profId, profNombre) {
   const user = getCurrentUser();
@@ -1614,7 +1789,7 @@ function quitarQuoteFoto(index) {
   renderQuotePreview();
 }
 
-function enviarPresupuesto(e) {
+async function enviarPresupuesto(e) {
   e.preventDefault();
   const user = getCurrentUser();
   if (!user || user.tipo !== 'cliente') return;
@@ -1629,37 +1804,46 @@ function enviarPresupuesto(e) {
     return;
   }
 
-  const quote = {
-    id: 'q_' + Date.now(),
-    profId,
-    clienteId: user.id,
-    clienteNombre: user.nombre,
-    clienteEmail: user.email,
-    telefono,
-    descripcion,
-    urgencia,
-    fotos: [...quoteFotosData],
-    fecha: new Date().toISOString(),
-    estado: 'pendiente'
-  };
+  try {
+    showToast('Enviando solicitud...');
+    const fotoUrls = [];
+    for (let i = 0; i < quoteFotosData.length; i++) {
+      try {
+        const url = await uploadImage(`quotes/${user.id}/${Date.now()}_${i}.jpg`, quoteFotosData[i]);
+        fotoUrls.push(url);
+      } catch (err) {
+        console.warn('Foto de presupuesto no subida:', err);
+      }
+    }
 
-  const quotes = getQuotes();
-  quotes.push(quote);
-  saveQuotes(quotes);
+    const quote = {
+      profId,
+      clienteId: user.id,
+      clienteNombre: user.nombre,
+      clienteEmail: user.email,
+      telefono,
+      descripcion,
+      urgencia,
+      fotos: fotoUrls,
+      fecha: new Date().toISOString(),
+      estado: 'pendiente'
+    };
 
-  // Notificación al profesional
-  saveNotification(profId, {
-    id: 'n_' + Date.now(),
-    tipo: 'presupuesto',
-    mensaje: `${user.nombre} te solicitó un presupuesto (${urgencia}).`,
-    detalle: descripcion.substring(0, 120) + (descripcion.length > 120 ? '...' : ''),
-    quoteId: quote.id,
-    fecha: new Date().toISOString(),
-    read: false
-  });
+    const ref = await db.collection('quotes').add(quote);
 
-  cerrarModalPresupuesto();
-  showToast('¡Solicitud de presupuesto enviada! El profesional te contactará.');
+    await saveNotification(profId, {
+      tipo: 'presupuesto',
+      mensaje: `${user.nombre} te solicitó un presupuesto (${urgencia}).`,
+      detalle: descripcion.substring(0, 120) + (descripcion.length > 120 ? '...' : ''),
+      quoteId: ref.id
+    });
+
+    cerrarModalPresupuesto();
+    showToast('¡Solicitud de presupuesto enviada! El profesional te contactará.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al enviar el presupuesto', 'error');
+  }
 }
 
 // ===== SOPORTE TÉCNICO (CHAT) =====
