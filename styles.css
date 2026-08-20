@@ -2186,3 +2186,48 @@ img {
   justify-content: center;
   margin-top: 1.2rem;
 }
+
+
+/* ===== BOTÓN INSTALAR PWA ===== */
+.btn-install {
+  background: white;
+  color: var(--primary);
+  border: 2px solid white;
+  font-weight: 600;
+  padding: 0.75rem 1.4rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--transition);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+
+.btn-install:hover {
+  background: #fff5eb;
+  transform: translateY(-2px);
+}
+
+.btn-install-nav {
+  background: var(--primary);
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 0.4rem 0.9rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: var(--transition);
+}
+
+.btn-install-nav:hover {
+  background: var(--primary-dark);
+  filter: brightness(1.05);
+}
