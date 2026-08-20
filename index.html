@@ -93,7 +93,7 @@
     <header class="hero">
       <div class="hero-content">
         <img src="./logo.jpg" alt="Oficios YA!" class="hero-logo" width="160" height="160">
-        <h1>Encuentra profesionales de confianza <span>cerca tuyo</span></h1>
+        <h1>Encuentra profesionales de confianza <span>cerca de ti</span></h1>
         <p>Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
         <div class="hero-buttons">
           <button class="btn btn-primary" onclick="showSection('search')">Buscar ahora</button>
@@ -703,13 +703,18 @@
   <!-- Toast notifications -->
   <div id="toast" class="toast"></div>
 
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="./firebase-config.js"></script>
   <script src="./app.js"></script>
   <script>
-    // Verificación: si app.js no cargó, avisar
     window.addEventListener('load', function () {
       if (typeof cargarLocalidades !== 'function') {
-        console.error('Oficios YA: no se pudo cargar app.js. Revisá que esté en la misma carpeta que index.html');
-        alert('No se pudo cargar app.js.\n\nAsegurate de tener estos 3 archivos en la MISMA carpeta:\n- index.html\n- styles.css\n- app.js');
+        console.error('Oficios YA: no se pudo cargar app.js.');
+        alert('No se pudo cargar app.js.\n\nAsegurate de tener en la misma carpeta:\n- index.html\n- styles.css\n- app.js\n- firebase-config.js\n- logo.jpg');
       }
     });
   </script>
