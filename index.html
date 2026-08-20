@@ -408,20 +408,6 @@
             <label>Domicilio / Zona de trabajo</label>
             <input type="text" id="oficioDomicilio" required placeholder="Barrio o zona">
           </div>
-          <div class="form-group">
-            <label>Foto de perfil <span style="color:#c1121f;">*</span></label>
-            <p style="font-size:0.8rem;color:var(--text-light);margin-bottom:0.5rem;">Obligatoria. Se verá en tu perfil y en las búsquedas.</p>
-            <div class="reg-photo-wrap">
-              <div class="reg-photo-preview" id="oficioFotoPreview">
-                <i class="fas fa-user-circle"></i>
-                <span>Sin foto</span>
-              </div>
-              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
-                <i class="fas fa-camera"></i> Elegir foto
-                <input type="file" id="oficioFotoPerfil" accept="image/*" required hidden onchange="previewFotoRegistro(event)">
-              </label>
-            </div>
-          </div>
           <div class="form-row">
             <div class="form-group">
               <label>Provincia</label>
@@ -464,6 +450,20 @@
             <label>Descripción breve (opcional)</label>
             <textarea id="oficioDescripcion" rows="3" placeholder="Contá un poco sobre tu experiencia y servicios..."></textarea>
           </div>
+          <div class="form-group">
+            <label>Foto de perfil <span style="color:#c1121f;">*</span></label>
+            <p style="font-size:0.8rem;color:var(--text-light);margin-bottom:0.5rem;">Obligatoria. Se verá en tu perfil y en las búsquedas.</p>
+            <div class="reg-photo-wrap">
+              <div class="reg-photo-preview" id="oficioFotoPreview">
+                <i class="fas fa-user-circle"></i>
+                <span>Sin foto</span>
+              </div>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                <i class="fas fa-camera"></i> Elegir foto
+                <input type="file" id="oficioFotoPerfil" accept="image/*" required hidden onchange="previewFotoRegistro(event)">
+              </label>
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary btn-block">Registrarme como Profesional</button>
         </form>
       </div>
@@ -483,6 +483,12 @@
           <div class="form-group">
             <label>Contraseña</label>
             <input type="password" id="loginPass" required placeholder="Tu contraseña">
+          </div>
+          <div class="form-group remember-row">
+            <label class="remember-label">
+              <input type="checkbox" id="loginRemember">
+              <span>Recordar contraseña</span>
+            </label>
           </div>
           <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
         </form>
