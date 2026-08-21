@@ -682,25 +682,74 @@ async function seedDemoIfEmpty() {
 }
 
 // ===== NAV & SECTIONS =====
+function closeMobileNav() {
+  const nav = document.getElementById('navLinks');
+  if (nav) nav.classList.remove('open');
+  closeUserMenu();
+}
+
 function showSection(sectionId) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const section = document.getElementById(sectionId);
   if (section) section.classList.add('active');
-  
-  // Cerrar menú mobile
-  document.getElementById('navLinks').classList.remove('open');
-  
-  // Si es search, cargar todos
+
+  closeMobileNav();
+
   if (sectionId === 'search') {
     realizarBusqueda();
   }
-  
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function toggleMenu() {
-  document.getElementById('navLinks').classList.toggle('open');
+  const nav = document.getElementById('navLinks');
+  if (!nav) return;
+  nav.classList.toggle('open');
+  // Al abrir el menú hamburguesa, cerrar dropdown de usuario
+  if (!nav.classList.contains('open')) closeUserMenu();
 }
+
+function irAMiPerfil(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  closeMobileNav();
+  const user = getCurrentUser();
+  if (!user) {
+    showToast('Iniciá sesión para ver tu perfil', 'error');
+    showSection('login');
+    return;
+  }
+  if (user.tipo === 'oficio') {
+    showMyProfile(false);
+  } else {
+    abrirEditarPerfil();
+  }
+}
+
+function irANotificaciones(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  closeMobileNav();
+  showNotifications();
+}
+
+function irAEditarPerfil(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  closeMobileNav();
+  abrirEditarPerfil();
+}
+
+window.irAMiPerfil = irAMiPerfil;
+window.irANotificaciones = irANotificaciones;
+window.irAEditarPerfil = irAEditarPerfil;
 
 function getUserIniciales(nombre) {
   if (!nombre) return '?';
@@ -713,13 +762,15 @@ function updateNav() {
   const navLogin = document.getElementById('navLogin');
   const navNotifications = document.getElementById('navNotifications');
   const navUserMenu = document.getElementById('navUserMenu');
+  const navMyProfileLink = document.getElementById('navMyProfileLink');
 
   closeUserMenu();
 
   if (user) {
-    navRegister.style.display = 'none';
-    navLogin.style.display = 'none';
+    if (navRegister) navRegister.style.display = 'none';
+    if (navLogin) navLogin.style.display = 'none';
     if (navUserMenu) navUserMenu.style.display = 'block';
+    if (navMyProfileLink) navMyProfileLink.style.display = 'block';
 
     const iniciales = getUserIniciales(user.nombre);
     const firstName = (user.nombre || '').split(' ')[0];
@@ -761,10 +812,11 @@ function updateNav() {
       if (menuNotifs) menuNotifs.style.display = 'none';
     }
   } else {
-    navRegister.style.display = 'block';
-    navLogin.style.display = 'block';
+    if (navRegister) navRegister.style.display = 'block';
+    if (navLogin) navLogin.style.display = 'block';
     if (navUserMenu) navUserMenu.style.display = 'none';
     if (navNotifications) navNotifications.style.display = 'none';
+    if (navMyProfileLink) navMyProfileLink.style.display = 'none';
   }
 }
 
@@ -847,11 +899,12 @@ async function guardarCuenta(e) {
   }
 }
 
-// Cerrar menú al hacer clic fuera
+// Cerrar menú de usuario al hacer clic fuera (con delay para no anular el tap en móvil)
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('navUserMenu');
   if (!menu || !menu.classList.contains('open')) return;
-  if (!menu.contains(e.target)) closeUserMenu();
+  if (menu.contains(e.target)) return;
+  setTimeout(() => closeUserMenu(), 10);
 });
 
 window.toggleUserMenu = toggleUserMenu;
@@ -2094,9 +2147,21 @@ async function enviarResena(e) {
 // ===== NOTIFICATIONS =====
 async function showNotifications() {
   const user = getCurrentUser();
-  if (!user || user.tipo !== 'oficio') return;
+  if (!user) {
+    showToast('Iniciá sesión para ver notificaciones', 'error');
+    showSection('login');
+    return;
+  }
+  if (user.tipo !== 'oficio') {
+    showToast('Las notificaciones están disponibles para profesionales', 'error');
+    return;
+  }
 
   const container = document.getElementById('notificationsList');
+  if (!container) {
+    showToast('No se encontró la sección de notificaciones', 'error');
+    return;
+  }
   container.innerHTML = '<p style="text-align:center;color:var(--text-light);">Cargando...</p>';
   showSection('notifications');
 
