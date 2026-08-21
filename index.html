@@ -60,9 +60,12 @@
         </li>
         <li id="navRegister"><a href="#" onclick="showSection('register')">Registrarse</a></li>
         <li id="navLogin"><a href="#" onclick="showSection('login')">Iniciar Sesión</a></li>
+        <li id="navMyProfileLink" style="display:none;">
+          <a href="#" onclick="irAMiPerfil(event); return false;"><i class="fas fa-user"></i> Mi Perfil</a>
+        </li>
         <li id="navNotifications" style="display:none;">
-          <a href="#" onclick="showNotifications()" class="notif-btn">
-            <i class="fas fa-bell"></i>
+          <a href="#" onclick="irANotificaciones(event); return false;" class="notif-btn">
+            <i class="fas fa-bell"></i> Notificaciones
             <span class="badge" id="notifBadge" style="display:none;">0</span>
           </a>
         </li>
@@ -80,13 +83,13 @@
                 <small id="userDropRole">Cliente</small>
               </div>
             </div>
-            <a href="#" class="user-dropdown-item" id="menuEditProfile" onclick="abrirEditarPerfil(); return false;">
+            <a href="#" class="user-dropdown-item" id="menuEditProfile" onclick="irAEditarPerfil(event); return false;">
               <i class="fas fa-user-edit"></i> Editar mi perfil
             </a>
-            <a href="#" class="user-dropdown-item" id="menuMyProfile" style="display:none;" onclick="showMyProfile(); closeUserMenu(); return false;">
+            <a href="#" class="user-dropdown-item" id="menuMyProfile" style="display:none;" onclick="irAMiPerfil(event); return false;">
               <i class="fas fa-id-card"></i> Mi perfil profesional
             </a>
-            <a href="#" class="user-dropdown-item" id="menuNotifs" style="display:none;" onclick="showNotifications(); closeUserMenu(); return false;">
+            <a href="#" class="user-dropdown-item" id="menuNotifs" style="display:none;" onclick="irANotificaciones(event); return false;">
               <i class="fas fa-bell"></i> Notificaciones
             </a>
             <hr class="user-dropdown-divider">
@@ -105,47 +108,81 @@
   <!-- HOME SECTION -->
   <section id="home" class="section active">
     <header class="hero">
+      <div class="hero-shapes" aria-hidden="true">
+        <span class="blob blob-1"></span>
+        <span class="blob blob-2"></span>
+        <span class="blob blob-3"></span>
+      </div>
       <div class="hero-content">
         <img src="./logo.jpg" alt="Oficios YA!" class="hero-logo" width="160" height="160">
+        <p class="hero-badge"><i class="fas fa-shield-alt"></i> Profesionales cerca tuyo</p>
         <h1>Encuentra profesionales de confianza <span>cerca de ti</span></h1>
-        <p>Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
+        <p class="hero-subtitle">Plomería, gasistas, electricistas, pintores y más. Rápido, seguro y con reseñas reales.</p>
+        <div class="hero-search-chip" onclick="showSection('search')">
+          <i class="fas fa-search"></i>
+          <span>¿Qué oficio necesitás hoy?</span>
+          <i class="fas fa-arrow-right"></i>
+        </div>
         <div class="hero-buttons">
-          <button class="btn btn-primary" onclick="showSection('search')">Buscar ahora</button>
-          <button class="btn btn-outline" onclick="showSection('register')">Registrarme</button>
+          <button class="btn btn-primary" onclick="showSection('search')"><i class="fas fa-search"></i> Buscar ahora</button>
+          <button class="btn btn-outline" onclick="showSection('register')"><i class="fas fa-user-plus"></i> Registrarme</button>
           <button type="button" class="btn btn-install" id="btnInstallHero" style="display:none;" onclick="instalarApp()">
             <i class="fas fa-download"></i> Instalar app
           </button>
         </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><strong>8+</strong><span>Oficios</span></div>
+          <div class="hero-stat"><strong>24/7</strong><span>Disponible</span></div>
+          <div class="hero-stat"><strong>★</strong><span>Reseñas reales</span></div>
+        </div>
       </div>
     </header>
 
-    <div class="container">
+    <div class="container home-body">
+      <!-- Accesos rápidos móviles -->
+      <div class="quick-actions">
+        <button type="button" class="quick-action" onclick="showSection('search')">
+          <span class="qa-icon qa-search"><i class="fas fa-search"></i></span>
+          <span>Buscar</span>
+        </button>
+        <button type="button" class="quick-action" onclick="showSection('register')">
+          <span class="qa-icon qa-reg"><i class="fas fa-user-plus"></i></span>
+          <span>Registro</span>
+        </button>
+        <button type="button" class="quick-action" onclick="showSection('login')">
+          <span class="qa-icon qa-login"><i class="fas fa-sign-in-alt"></i></span>
+          <span>Ingresar</span>
+        </button>
+        <button type="button" class="quick-action" onclick="quickSearch('Plomería')">
+          <span class="qa-icon qa-tool"><i class="fas fa-faucet"></i></span>
+          <span>Plomería</span>
+        </button>
+      </div>
+
       <!-- Bienvenida -->
       <div class="welcome-card">
         <div class="welcome-text">
           <h2><i class="fas fa-handshake"></i> ¡Bienvenido a Oficios YA!</h2>
           <p>
-            Somos la plataforma que conecta a vecinos con profesionales de oficios de forma sencilla y confiable. 
-            Ya no más perder tiempo buscando recomendaciones o números de teléfono. 
-            Aquí encontrás plomeros, gasistas, electricistas, pintores, albañiles y muchos más, 
-            con perfiles verificados, fotos de trabajos reales y reseñas de otros clientes.
+            Conectamos vecinos con profesionales de oficios de forma simple y confiable.
+            Perfiles claros, fotos de trabajos y reseñas reales para elegir con tranquilidad.
           </p>
           <div class="benefits">
             <div class="benefit">
               <i class="fas fa-star"></i>
-              <span>Reseñas y valoraciones reales</span>
+              <span>Reseñas reales</span>
             </div>
             <div class="benefit">
               <i class="fas fa-map-marker-alt"></i>
-              <span>Buscá por localidad y provincia</span>
+              <span>Cerca de tu zona</span>
             </div>
             <div class="benefit">
               <i class="fas fa-camera"></i>
-              <span>Fotos de trabajos realizados</span>
+              <span>Fotos de trabajos</span>
             </div>
             <div class="benefit">
               <i class="fas fa-bell"></i>
-              <span>Notificaciones al instante</span>
+              <span>Avisos al instante</span>
             </div>
           </div>
         </div>
