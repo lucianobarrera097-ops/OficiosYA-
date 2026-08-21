@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -124,8 +125,7 @@
           <i class="fas fa-arrow-right"></i>
         </div>
         <div class="hero-buttons">
-          <button class="btn btn-primary" onclick="showSection('search')"><i class="fas fa-search"></i> Buscar ahora</button>
-          <button class="btn btn-outline" onclick="showSection('register')"><i class="fas fa-user-plus"></i> Registrarme</button>
+          <button type="button" class="btn btn-outline" id="btnHeroRegister" onclick="showSection('register')"><i class="fas fa-user-plus"></i> Registrarme</button>
           <button type="button" class="btn btn-install" id="btnInstallHero" style="display:none;" onclick="instalarApp()">
             <i class="fas fa-download"></i> Instalar app
           </button>
@@ -145,7 +145,7 @@
           <span class="qa-icon qa-search"><i class="fas fa-search"></i></span>
           <span>Buscar</span>
         </button>
-        <button type="button" class="quick-action" onclick="showSection('register')">
+        <button type="button" class="quick-action" id="btnQuickRegister" onclick="showSection('register')">
           <span class="qa-icon qa-reg"><i class="fas fa-user-plus"></i></span>
           <span>Registro</span>
         </button>
