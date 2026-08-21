@@ -820,6 +820,10 @@ function updateNav() {
   if (user) {
     if (navRegister) navRegister.style.display = 'none';
     if (navLogin) navLogin.style.display = 'none';
+    const btnHeroRegister = document.getElementById('btnHeroRegister');
+    if (btnHeroRegister) btnHeroRegister.style.display = 'none';
+    const btnQuickRegister = document.getElementById('btnQuickRegister');
+    if (btnQuickRegister) btnQuickRegister.style.display = 'none';
     if (navUserMenu) navUserMenu.style.display = 'block';
     if (navMyProfileLink) navMyProfileLink.style.display = 'block';
 
@@ -865,6 +869,10 @@ function updateNav() {
   } else {
     if (navRegister) navRegister.style.display = 'block';
     if (navLogin) navLogin.style.display = 'block';
+    const btnHeroRegisterOut = document.getElementById('btnHeroRegister');
+    if (btnHeroRegisterOut) btnHeroRegisterOut.style.display = '';
+    const btnQuickRegisterOut = document.getElementById('btnQuickRegister');
+    if (btnQuickRegisterOut) btnQuickRegisterOut.style.display = '';
     if (navUserMenu) navUserMenu.style.display = 'none';
     if (navNotifications) navNotifications.style.display = 'none';
     if (navMyProfileLink) navMyProfileLink.style.display = 'none';
