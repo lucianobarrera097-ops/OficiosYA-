@@ -1,2569 +1,2801 @@
-// ===== DATA & STORAGE (Firebase) =====
-// currentUser se mantiene en memoria + sessionStorage para la UI
-let currentUserCache = null;
-// Evita que onAuthStateChanged borre la sesión mientras registramos el perfil en Firestore
-let authBusy = false;
-
-function requireFirebase() {
-  if (typeof firebaseReady === 'undefined' || !firebaseReady) {
-    showToast('Firebase no está configurado. Completá firebase-config.js', 'error');
-    throw new Error('Firebase no configurado');
-  }
-}
-
-async function loadUserProfileWithRetry(uid, attempts = 8, delayMs = 300) {
-  for (let i = 0; i < attempts; i++) {
-    const profile = await loadUserProfile(uid);
-    if (profile) return profile;
-    await new Promise(r => setTimeout(r, delayMs));
-  }
-  return null;
-}
-
-// ===== PROVINCIAS Y LOCALIDADES (principales) =====
-const PROVINCIAS_LOCALIDADES = {
-  "Buenos Aires": [
-    "La Plata", "Mar del Plata", "Bahía Blanca", "Quilmes", "Lanús", "General San Martín",
-    "Lomas de Zamora", "La Matanza", "Almirante Brown", "Avellaneda", "San Isidro", "Tigre",
-    "Vicente López", "Morón", "San Miguel", "José C. Paz", "Malvinas Argentinas", "Pilar",
-    "Escobar", "Campana", "Zárate", "Luján", "Mercedes", "Chivilcoy", "Junín", "Pergamino",
-    "San Nicolás", "Olavarría", "Tandil", "Necochea", "Azul", "Tres Arroyos", "Balcarce",
-    "General Pueyrredón", "Berazategui", "Florencio Varela", "Esteban Echeverría", "Ezeiza",
-    "Hurlingham", "Ituzaingó", "Moreno", "Merlo", "La Costa", "Pinamar", "Villa Gesell",
-    "San Fernando", "Berisso", "Ensenada", "Brandsen", "Cañuelas", "Lobos", "Chascomús",
-    "Dolores", "General Belgrano", "Las Flores", "Rauch", "Ayacucho", "Benito Juárez",
-    "Coronel Suárez", "Coronel Pringles", "Coronel Dorrego", "Punta Alta", "Pedro Luro",
-    "Carmen de Patagones", "Viedma (límite)", "9 de Julio", "Carlos Casares", "Pehuajó",
-    "Lincoln", "General Villegas", "Trenque Lauquen", "América", "Bragado", "Chacabuco",
-    "Salto", "Rojas", "Colón", "San Antonio de Areco", "Baradero", "Ramallo", "San Pedro",
-    "Arrecifes", "Capitán Sarmiento", "Carmen de Areco", "Suipacha", "Navarro", "General Las Heras",
-    "Marcos Paz", "General Rodríguez", "Luján", "Exaltación de la Cruz", "San Andrés de Giles"
-  ],
-  "Ciudad Autónoma de Buenos Aires": [
-    "Agronomía", "Almagro", "Balvanera", "Barracas", "Belgrano", "Boedo", "Caballito",
-    "Chacarita", "Coghlan", "Colegiales", "Constitución", "Flores", "Floresta", "La Boca",
-    "La Paternal", "Liniers", "Mataderos", "Monte Castro", "Monserrat", "Nueva Pompeya",
-    "Núñez", "Palermo", "Parque Avellaneda", "Parque Chacabuco", "Parque Chas", "Parque Patricios",
-    "Puerto Madero", "Recoleta", "Retiro", "Saavedra", "San Cristóbal", "San Nicolás",
-    "San Telmo", "Vélez Sársfield", "Versalles", "Villa Crespo", "Villa del Parque",
-    "Villa Devoto", "Villa General Mitre", "Villa Lugano", "Villa Luro", "Villa Ortúzar",
-    "Villa Pueyrredón", "Villa Real", "Villa Riachuelo", "Villa Santa Rita", "Villa Soldati",
-    "Villa Urquiza"
-  ],
-  "Catamarca": [
-    "San Fernando del Valle de Catamarca", "Valle Viejo", "Fray Mamerto Esquiú", "Capayán",
-    "Santa María", "Belén", "Andalgalá", "Tinogasta", "Fiambalá", "Recreo", "Santa Rosa",
-    "Ancasti", "El Alto", "La Paz", "Paclín", "Pomán", "Mutquín", "Londres", "Hualfín"
-  ],
-  "Chaco": [
-    "Resistencia", "Barranqueras", "Fontana", "Puerto Vilelas", "Presidencia Roque Sáenz Peña",
-    "Villa Ángela", "Charata", "General San Martín", "Juan José Castelli", "Machagai",
-    "Quitilipi", "Las Breñas", "General Pinedo", "Corzuela", "Campo Largo", "Tres Isletas",
-    "Makallé", "La Leonesa", "Puerto Tirol", "Colonia Elisa", "Villa Berthet", "Santa Sylvina"
-  ],
-  "Chubut": [
-    "Rawson", "Trelew", "Puerto Madryn", "Comodoro Rivadavia", "Esquel", "Sarmiento",
-    "Gaiman", "Dolavon", "28 de Julio", "Rada Tilly", "Playa Unión", "Camarones",
-    "Trevelin", "El Hoyo", "Epuyén", "Lago Puelo", "El Maitén", "Cushamen", "Gastre",
-    "Paso de Indios", "José de San Martín", "Río Mayo", "Alto Río Senguer"
-  ],
-  "Córdoba": [
-    "Córdoba", "Villa María", "Río Cuarto", "San Francisco", "Villa Carlos Paz", "Alta Gracia",
-    "Río Tercero", "Bell Ville", "Jesús María", "La Calera", "Villa Allende", "Unquillo",
-    "Mendiolaza", "Río Segundo", "Pilar", "Oncativo", "Oliva", "Las Varillas", "Arroyito",
-    "Marcos Juárez", "Leones", "Cruz del Eje", "Deán Funes", "Villa Dolores", "Mina Clavero",
-    "Cosquín", "La Falda", "Capilla del Monte", "Villa General Belgrano", "Embalse",
-    "Santa Rosa de Calamuchita", "Laboulaye", "General Cabrera", "Adelia María", "Coronel Moldes",
-    "Huinca Renancó", "Villa Huidobro", "Morrison", "Inriville", "Monte Cristo", "Malvinas Argentinas"
-  ],
-  "Corrientes": [
-    "Corrientes", "Goya", "Mercedes", "Paso de los Libres", "Curuzú Cuatiá", "Esquina",
-    "Bella Vista", "Santo Tomé", "Monte Caseros", "Ituzaingó", "Saladas", "San Luis del Palmar",
-    "Empedrado", "Lavalle", "Mburucuyá", "San Roque", "Concepción", "Sauce", "Alvear",
-    "La Cruz", "Gobernador Virasoro", "San Martín", "Felipe Yofre"
-  ],
-  "Entre Ríos": [
-    "Paraná", "Concordia", "Gualeguaychú", "Concepción del Uruguay", "Gualeguay", "Villaguay",
-    "Colón", "Federación", "Chajarí", "La Paz", "Victoria", "Nogoyá", "Rosario del Tala",
-    "San José", "Villa Elisa", "Crespo", "Diamante", "Federal", "Basavilbaso", "Urdinarrain",
-    "Santa Elena", "Hasenkamp", "Viale", "Oro Verde", "Villa Urquiza"
-  ],
-  "Formosa": [
-    "Formosa", "Clorinda", "Pirané", "El Colorado", "Las Lomitas", "Ingeniero Juárez",
-    "Ibarreta", "Comandante Fontana", "Laguna Blanca", "General Belgrano", "Estanislao del Campo",
-    "Villa General Güemes", "Herradura", "Palo Santo", "General Lucio V. Mansilla", "Riacho He-Hé"
-  ],
-  "Jujuy": [
-    "San Salvador de Jujuy", "Palpalá", "Perico", "San Pedro de Jujuy", "Libertador General San Martín",
-    "La Quiaca", "Humahuaca", "Tilcara", "Abra Pampa", "El Carmen", "Monterrico", "Yuto",
-    "Calilegua", "Fraile Pintado", "Caimancito", "Maimará", "Purmamarca", "Susques", "Rinconada"
-  ],
-  "La Pampa": [
-    "Santa Rosa", "General Pico", "Toay", "Realicó", "General Acha", "Victorica", "Intendente Alvear",
-    "Eduardo Castex", "Macachín", "Guatraché", "Winifreda", "Anguil", "Catriló", "Quemú Quemú",
-    "Trenel", "Bernardo Larroudé", "Ingeniero Luiggi", "25 de Mayo", "La Adela", "Jacinto Aráuz"
-  ],
-  "La Rioja": [
-    "La Rioja", "Chilecito", "Aimogasta", "Chamical", "Chepes", "Villa Unión", "Nonogasta",
-    "Famatina", "Vinchina", "Villa Castelli", "Ulapes", "Olta", "Tama", "Patquía", "Anillaco",
-    "Sanagasta", "Villa San José de Vinchina", "Guandacol"
-  ],
-  "Mendoza": [
-    "Mendoza", "Godoy Cruz", "Guaymallén", "Las Heras", "Maipú", "Luján de Cuyo", "San Martín",
-    "San Rafael", "Tunuyán", "Rivadavia", "Junín", "La Paz", "Santa Rosa", "Lavalle",
-    "General Alvear", "Malargüe", "Tupungato", "San Carlos", "Cacheuta", "Potrerillos",
-    "Uspallata", "Villa Nueva", "Palmira", "Rodeo del Medio", "Russell"
-  ],
-  "Misiones": [
-    "Posadas", "Oberá", "Eldorado", "Puerto Iguazú", "Apóstoles", "Leandro N. Alem", "San Vicente",
-    "Montecarlo", "Jardín América", "Aristóbulo del Valle", "Puerto Rico", "Wanda", "Capioví",
-    "San Pedro", "El Soberbio", "Bernardo de Irigoyen", "Candelaria", "Garupá", "Gobernador Roca",
-    "San Ignacio", "Corpus", "Puerto Esperanza", "Colonia Victoria", "Dos de Mayo"
-  ],
-  "Neuquén": [
-    "Neuquén", "Cutral Có", "Plaza Huincul", "Zapala", "San Martín de los Andes", "Villa La Angostura",
-    "Centenario", "Plottier", "Senillosa", "Añelo", "Rincón de los Sauces", "Chos Malal",
-    "Junín de los Andes", "Aluminé", "Las Lajas", "Picún Leufú", "Piedra del Águila", "Villa Pehuenia",
-    "Caviahue", "El Cholar", "Andacollo", "Tricao Malal"
-  ],
-  "Río Negro": [
-    "Viedma", "San Carlos de Bariloche", "General Roca", "Cipolletti", "Allen", "Cinco Saltos",
-    "Villa Regina", "Catriel", "Choele Choel", "Luis Beltrán", "Lamarque", "Chimpay",
-    "El Bolsón", "Ingeniero Jacobacci", "Río Colorado", "Sierra Grande", "Las Grutas", "San Antonio Oeste",
-    "Valcheta", "Los Menucos", "Maquinchao", "Ñorquinco", "Dina Huapi", "Villa Mascardi"
-  ],
-  "Salta": [
-    "Salta", "San Ramón de la Nueva Orán", "Tartagal", "General Güemes", "Metán", "Rosario de la Frontera",
-    "Cafayate", "Cachi", "Joaquín V. González", "Embarcación", "Pichanal", "Profesor Salvador Mazza",
-    "Aguaray", "Campo Quijano", "Rosario de Lerma", "El Carril", "Chicoana", "La Caldera",
-    "San Antonio de los Cobres", "Iruya", "Santa Victoria", "Vaqueros", "San Lorenzo", "Coronel Moldes"
-  ],
-  "San Juan": [
-    "San Juan", "Rawson", "Rivadavia", "Santa Lucía", "Chimbas", "Pocito", "Caucete", "Albardón",
-    "Angaco", "San Martín", "9 de Julio", "25 de Mayo", "Sarmiento", "Jáchal", "Iglesia",
-    "Calingasta", "Valle Fértil", "Ullum", "Zonda", "Villa Krause", "Villa Aberastain"
-  ],
-  "San Luis": [
-    "San Luis", "Villa Mercedes", "Merlo", "La Punta", "Justo Daract", "Naschel", "Concarán",
-    "Tilisarao", "Santa Rosa del Conlara", "Quines", "San Francisco del Monte de Oro", "Buena Esperanza",
-    "Unión", "Arizona", "Villa de la Quebrada", "El Trapiche", "Potrero de los Funes", "Juana Koslay"
-  ],
-  "Santa Cruz": [
-    "Río Gallegos", "Caleta Olivia", "Pico Truncado", "Puerto Deseado", "Puerto San Julián",
-    "El Calafate", "El Chaltén", "Las Heras", "Perito Moreno", "Los Antiguos", "Gobernador Gregores",
-    "Puerto Santa Cruz", "Comandante Luis Piedra Buena", "Río Turbio", "28 de Noviembre", "Hipólito Yrigoyen"
-  ],
-  "Santa Fe": [
-    "Rosario", "Santa Fe", "Rafaela", "Venado Tuerto", "Reconquista", "Santo Tomé", "Villa Gobernador Gálvez",
-    "San Lorenzo", "Capitán Bermúdez", "Granadero Baigorria", "Pérez", "Funes", "Roldán", "Casilda",
-    "Cañada de Gómez", "Firmat", "Rufino", "Villa Constitución", "San Nicolás (límite)", "Esperanza",
-    "San Justo", "Gálvez", "Sunchales", "Ceres", "Tostado", "Vera", "Avellaneda", "Malabrigo",
-    "Arroyo Seco", "Puerto General San Martín", "Fray Luis Beltrán", "Coronda", "Sauce Viejo"
-  ],
-  "Santiago del Estero": [
-    "Santiago del Estero", "La Banda", "Termas de Río Hondo", "Añatuya", "Frías", "Fernández",
-    "Monte Quemado", "Quimilí", "Loreto", "Suncho Corral", "Clodomira", "Beltrán", "Villa Ojo de Agua",
-    "Tintina", "Campo Gallo", "Pinto", "Bandera", "Selva", "Sumampa", "Villa Atamisqui"
-  ],
-  "Tierra del Fuego, Antártida e Islas del Atlántico Sur": [
-    "Ushuaia", "Río Grande", "Tolhuin", "Puerto Almanza", "San Sebastián"
-  ],
-  "Tucumán": [
-    "San Miguel de Tucumán", "Yerba Buena", "Tafí Viejo", "Banda del Río Salí", "Alderetes",
-    "Concepción", "Aguilares", "Monteros", "Famaillá", "Lules", "Tafí del Valle", "Simoca",
-    "Bella Vista", "Juan Bautista Alberdi", "La Cocha", "Graneros", "Trancas", "Burruyacú",
-    "Lastenia", "El Manantial", "San Pablo", "Villa Mariano Moreno", "Ingenio San Pablo"
-  ]
-};
-
-// Lista ordenada de provincias para los selects
-const LISTA_PROVINCIAS = Object.keys(PROVINCIAS_LOCALIDADES).sort((a, b) => a.localeCompare(b, 'es'));
-
-// Datos de ejemplo de profesionales
-const DEMO_PROFESIONALES = [
-  {
-    id: 'demo1',
-    tipo: 'oficio',
-    nombre: 'Carlos Méndez',
-    email: 'carlos.plomero@demo.com',
-    password: 'demo123',
-    telefono: '11 4567-8901',
-    dni: '28456789',
-    oficio: 'Plomería',
-    experiencia: 12,
-    edad: 38,
-    domicilio: 'Villa Crespo',
-    localidad: 'Villa Crespo',
-    provincia: 'Ciudad Autónoma de Buenos Aires',
-    descripcion: 'Plomero matriculado con más de 12 años de experiencia. Especialista en reparaciones de urgencia, instalaciones de baño y cocina.',
-    fotos: [
-      'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo2',
-    tipo: 'oficio',
-    nombre: 'Martín López',
-    email: 'martin.gasista@demo.com',
-    password: 'demo123',
-    telefono: '11 2345-6789',
-    dni: '31234567',
-    oficio: 'Gasista',
-    experiencia: 8,
-    edad: 32,
-    domicilio: 'Caballito',
-    localidad: 'Caballito',
-    provincia: 'Ciudad Autónoma de Buenos Aires',
-    descripcion: 'Gasista matriculado. Instalaciones de gas natural, termotanques y calefactores. Certificaciones al día.',
-    fotos: [
-      'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo3',
-    tipo: 'oficio',
-    nombre: 'Roberto Fernández',
-    email: 'roberto.elec@demo.com',
-    password: 'demo123',
-    telefono: '11 3456-7890',
-    dni: '25678901',
-    oficio: 'Electricista',
-    experiencia: 15,
-    edad: 45,
-    domicilio: 'Flores',
-    localidad: 'Flores',
-    provincia: 'Ciudad Autónoma de Buenos Aires',
-    descripcion: 'Electricista con 15 años de trayectoria. Instalaciones residenciales y comerciales, tableros y automatización.',
-    fotos: [
-      'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo4',
-    tipo: 'oficio',
-    nombre: 'Diego Ramírez',
-    email: 'diego.pintor@demo.com',
-    password: 'demo123',
-    telefono: '11 5678-9012',
-    dni: '29876543',
-    oficio: 'Pintor',
-    experiencia: 10,
-    edad: 35,
-    domicilio: 'Palermo',
-    localidad: 'Palermo',
-    provincia: 'Ciudad Autónoma de Buenos Aires',
-    descripcion: 'Pintor profesional. Especializado en pintura interior, exterior y trabajos decorativos. Acabados de calidad.',
-    fotos: [
-      'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo5',
-    tipo: 'oficio',
-    nombre: 'Jorge Acosta',
-    email: 'jorge.albanil@demo.com',
-    password: 'demo123',
-    telefono: '351 123-4567',
-    dni: '22345678',
-    oficio: 'Albañil',
-    experiencia: 20,
-    edad: 48,
-    domicilio: 'Nueva Córdoba',
-    localidad: 'Córdoba',
-    provincia: 'Córdoba',
-    descripcion: 'Albañil con dos décadas de experiencia. Reformas, ampliaciones, revoques y colocación de pisos.',
-    fotos: [
-      'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo6',
-    tipo: 'oficio',
-    nombre: 'Luis Gómez',
-    email: 'luis.carpintero@demo.com',
-    password: 'demo123',
-    telefono: '341 987-6543',
-    dni: '26789012',
-    oficio: 'Carpintero',
-    experiencia: 14,
-    edad: 41,
-    domicilio: 'Centro',
-    localidad: 'Rosario',
-    provincia: 'Santa Fe',
-    descripcion: 'Carpintero artesanal. Muebles a medida, puertas, ventanas y restauraciones de madera.',
-    fotos: [
-      'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&h=300&fit=crop'
-    ]
-  },
-  {
-    id: 'demo7',
-    tipo: 'oficio',
-    nombre: 'Pablo Suárez',
-    email: 'pablo.plomero@demo.com',
-    password: 'demo123',
-    telefono: '11 6789-0123',
-    dni: '34567890',
-    oficio: 'Plomería',
-    experiencia: 6,
-    edad: 29,
-    domicilio: 'San Isidro',
-    localidad: 'San Isidro',
-    provincia: 'Buenos Aires',
-    descripcion: 'Plomero joven y confiable. Trabajos residenciales, destapes y mantenimiento preventivo.',
-    fotos: []
-  },
-  {
-    id: 'demo8',
-    tipo: 'oficio',
-    nombre: 'Andrés Torres',
-    email: 'andres.elec@demo.com',
-    password: 'demo123',
-    telefono: '261 555-1234',
-    dni: '30123456',
-    oficio: 'Electricista',
-    experiencia: 9,
-    edad: 34,
-    domicilio: 'Godoy Cruz',
-    localidad: 'Godoy Cruz',
-    provincia: 'Mendoza',
-    descripcion: 'Electricista matriculado. Especialista en instalaciones de LED, domótica y energías renovables.',
-    fotos: [
-      'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&h=300&fit=crop'
-    ]
-  }
-];
-
-// Reseñas de ejemplo
-const DEMO_REVIEWS = [
-  {
-    id: 'r1',
-    profId: 'demo1',
-    clienteId: 'cliente_demo',
-    clienteNombre: 'María González',
-    calidad: 5,
-    tiempo: 5,
-    precio: 4,
-    comentario: 'Excelente trabajo. Carlos resolvió una pérdida de agua en minutos y dejó todo impecable. Muy recomendable.',
-    fecha: '2026-07-15'
-  },
-  {
-    id: 'r2',
-    profId: 'demo1',
-    clienteId: 'cliente_demo2',
-    clienteNombre: 'Juan Pérez',
-    calidad: 5,
-    tiempo: 4,
-    precio: 5,
-    comentario: 'Muy profesional y puntual. Cambió el tanque de agua sin problemas. Precio justo.',
-    fecha: '2026-06-22'
-  },
-  {
-    id: 'r3',
-    profId: 'demo2',
-    clienteId: 'cliente_demo',
-    clienteNombre: 'Ana Rodríguez',
-    calidad: 5,
-    tiempo: 5,
-    precio: 4,
-    comentario: 'Martín es un genio con el gas. Instalación perfecta del termotanque y me explicó todo.',
-    fecha: '2026-08-01'
-  },
-  {
-    id: 'r4',
-    profId: 'demo3',
-    clienteId: 'cliente_demo3',
-    clienteNombre: 'Laura Martínez',
-    calidad: 4,
-    tiempo: 5,
-    precio: 4,
-    comentario: 'Buen trabajo en la instalación eléctrica de mi local. Llegó a tiempo y trabajó limpio.',
-    fecha: '2026-05-10'
-  },
-  {
-    id: 'r5',
-    profId: 'demo4',
-    clienteId: 'cliente_demo',
-    clienteNombre: 'Sofía López',
-    calidad: 5,
-    tiempo: 4,
-    precio: 5,
-    comentario: 'Diego pintó mi departamento completo. Quedó hermoso, prolijo y el precio fue excelente.',
-    fecha: '2026-07-28'
-  }
-];
-
-// ===== INIT =====
-async function init() {
-  poblarSelectsProvincias();
-  [
-    ['filterProvincia', 'filterLocalidad'],
-    ['clienteProvincia', 'clienteLocalidad'],
-    ['oficioProvincia', 'oficioLocalidad']
-  ].forEach(([provId, locId]) => {
-    const el = document.getElementById(provId);
-    if (el) {
-      el.addEventListener('change', () => cargarLocalidades(provId, locId));
-    }
-  });
-  setupRatingStars();
-  setMaxFechaNacimiento();
-  cargarCredencialesRecordadas();
-
-  // Historial inicial: inicio (o la sección del hash si existe)
-  const initialSection = (location.hash || '#home').replace('#', '') || 'home';
-  const validInitial = document.getElementById(initialSection) ? initialSection : 'home';
-  try {
-    history.replaceState({ section: validInitial }, '', '#' + validInitial);
-  } catch (err) { /* ignore */ }
-  showSection(validInitial, true);
-
-  if (typeof firebaseReady === 'undefined' || !firebaseReady) {
-    console.warn('Firebase no configurado — la app no persistirá datos en la nube.');
-    showToast('Configurá Firebase (firebase-config.js) para guardar datos en la nube', 'error');
-    updateNav();
-    return;
-  }
-
-  // Sesión persistente de Firebase Auth
-  auth.onAuthStateChanged(async (firebaseUser) => {
-    if (firebaseUser) {
-      try {
-        // Si estamos en medio del registro, no pisar la sesión
-        if (authBusy && currentUserCache && currentUserCache.id === firebaseUser.uid) {
-          updateNav();
-          return;
-        }
-        const profile = await loadUserProfileWithRetry(firebaseUser.uid);
-        if (profile) {
-          currentUserCache = { ...profile, id: firebaseUser.uid, email: firebaseUser.email };
-          sessionStorage.setItem('oficiosya_uid', firebaseUser.uid);
-        } else if (!authBusy) {
-          // Perfil aún no existe (registro a medias): no forzar logout visual
-          console.warn('Perfil no encontrado todavía para', firebaseUser.uid);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      if (!authBusy) {
-        currentUserCache = null;
-        sessionStorage.removeItem('oficiosya_uid');
-      }
-    }
-    updateNav();
-  });
-
-  // Si el usuario vuelve desde el link del email (?mode=verifyEmail&oobCode=...)
-  try {
-    await procesarLinkVerificacionEmail();
-  } catch (e) {
-    console.warn(e);
-  }
-
-  // Sembrar profesionales demo solo si no hay ninguno
-  try {
-    await seedDemoIfEmpty();
-  } catch (e) {
-    console.warn('No se pudieron cargar demos:', e);
-  }
-}
-
-// ===== PROVINCIAS / LOCALIDADES DINÁMICAS =====
-function poblarSelectsProvincias() {
-  const ids = ['filterProvincia', 'clienteProvincia', 'oficioProvincia'];
-  ids.forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    // Si ya hay más de 1 opción (las del HTML), no reemplazar
-    if (sel.options.length > 1) return;
-    const first = sel.options[0] ? sel.options[0].outerHTML : '<option value="">Seleccionar...</option>';
-    sel.innerHTML = first;
-    LISTA_PROVINCIAS.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = p;
-      sel.appendChild(opt);
-    });
-  });
-}
-
-function cargarLocalidades(provinciaSelectId, localidadSelectId, selectedLocalidad) {
-  const provSel = document.getElementById(provinciaSelectId);
-  const locSel = document.getElementById(localidadSelectId);
-  if (!provSel || !locSel) return;
-
-  const provincia = (provSel.value || '').trim();
-  locSel.innerHTML = '';
-
-  if (!provincia) {
-    locSel.setAttribute('disabled', 'disabled');
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'Primero elegí provincia';
-    locSel.appendChild(opt);
-    return;
-  }
-
-  // Buscar localidades (coincidencia exacta o por si hay variación de nombre)
-  let localidades = PROVINCIAS_LOCALIDADES[provincia];
-  if (!localidades) {
-    const key = Object.keys(PROVINCIAS_LOCALIDADES).find(
-      k => k.toLowerCase() === provincia.toLowerCase()
-    );
-    localidades = key ? PROVINCIAS_LOCALIDADES[key] : [];
-  }
-  if (!localidades) localidades = [];
-
-  locSel.removeAttribute('disabled');
-  locSel.disabled = false;
-
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = localidades.length
-    ? 'Seleccionar localidad...'
-    : 'Sin localidades cargadas';
-  locSel.appendChild(placeholder);
-
-  localidades.forEach(loc => {
-    const opt = document.createElement('option');
-    opt.value = loc;
-    opt.textContent = loc;
-    if (selectedLocalidad && selectedLocalidad === loc) opt.selected = true;
-    locSel.appendChild(opt);
-  });
-
-  // Si la localidad guardada no está en la lista, la agregamos
-  if (selectedLocalidad && !localidades.includes(selectedLocalidad)) {
-    const opt = document.createElement('option');
-    opt.value = selectedLocalidad;
-    opt.textContent = selectedLocalidad + ' (actual)';
-    opt.selected = true;
-    locSel.appendChild(opt);
-  }
-}
-
-
-// ===== FOTO DE PERFIL (registro / edición) =====
-let oficioFotoPerfilDataUrl = null;
-
-function previewFotoRegistro(e) {
-  const file = e.target.files && e.target.files[0];
-  const preview = document.getElementById('oficioFotoPreview');
-  if (!file || !preview) return;
-  if (!file.type.startsWith('image/')) {
-    showToast('Solo se permiten imágenes', 'error');
-    e.target.value = '';
-    return;
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('La foto debe pesar menos de 2MB', 'error');
-    e.target.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    oficioFotoPerfilDataUrl = ev.target.result;
-    preview.innerHTML = `<img src="${oficioFotoPerfilDataUrl}" alt="Vista previa">`;
-  };
-  reader.readAsDataURL(file);
-}
-
-window.previewFotoRegistro = previewFotoRegistro;
-
-// Exponer en window por si se llama desde HTML
-window.cargarLocalidades = cargarLocalidades;
-
-// ===== FIRESTORE HELPERS =====
-function getCurrentUser() {
-  return currentUserCache;
-}
-
-function setCurrentUser(user) {
-  currentUserCache = user;
-}
-
-async function loadUserProfile(uid) {
-  const doc = await db.collection('users').doc(uid).get();
-  if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() };
-}
-
-async function getUsers() {
-  requireFirebase();
-  const snap = await db.collection('users').get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function getProfesionales() {
-  requireFirebase();
-  const snap = await db.collection('users').where('tipo', '==', 'oficio').get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function getReviews() {
-  requireFirebase();
-  const snap = await db.collection('reviews').get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function getReviewsByProf(profId) {
-  requireFirebase();
-  const snap = await db.collection('reviews').where('profId', '==', profId).get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function getNotifications(userId) {
-  requireFirebase();
-  const snap = await db.collection('notifications')
-    .where('userId', '==', userId)
-    .orderBy('fecha', 'desc')
-    .limit(50)
-    .get()
-    .catch(async () => {
-      // Si falta índice compuesto, traer sin orderBy
-      const s = await db.collection('notifications').where('userId', '==', userId).get();
-      return s;
-    });
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-  return list;
-}
-
-async function saveNotification(userId, notif) {
-  requireFirebase();
-  await db.collection('notifications').add({
-    ...notif,
-    userId,
-    fecha: notif.fecha || new Date().toISOString(),
-    read: false
-  });
-}
-
-async function markNotificationsRead(userId) {
-  requireFirebase();
-  const snap = await db.collection('notifications')
-    .where('userId', '==', userId)
-    .where('read', '==', false)
-    .get()
-    .catch(async () => db.collection('notifications').where('userId', '==', userId).get());
-  const batch = db.batch();
-  snap.docs.forEach(d => {
-    if (d.data().read === false || d.data().read === undefined) {
-      batch.update(d.ref, { read: true });
-    }
-  });
-  await batch.commit();
-}
-
-async function getQuotes() {
-  requireFirebase();
-  const snap = await db.collection('quotes').get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function uploadImage(path, dataUrl) {
-  requireFirebase();
-  const ref = storage.ref().child(path);
-  await ref.putString(dataUrl, 'data_url');
-  return await ref.getDownloadURL();
-}
-
-async function seedDemoIfEmpty() {
-  const snap = await db.collection('users').where('tipo', '==', 'oficio').limit(1).get();
-  if (!snap.empty) return;
-
-  const batch = db.batch();
-  DEMO_PROFESIONALES.forEach(p => {
-    const { password, ...rest } = p;
-    const ref = db.collection('users').doc(p.id);
-    batch.set(ref, { ...rest, demo: true, createdAt: new Date().toISOString() });
-  });
-  DEMO_REVIEWS.forEach(r => {
-    const ref = db.collection('reviews').doc(r.id);
-    batch.set(ref, r);
-  });
-  await batch.commit();
-  console.log('Datos demo cargados en Firestore');
-}
-
-// ===== NAV & SECTIONS =====
-function closeMobileNav() {
-  const nav = document.getElementById('navLinks');
-  if (nav) nav.classList.remove('open');
-  closeUserMenu();
-}
-
-/**
- * Navegación SPA con historial del navegador.
- * fromHistory=true cuando viene del botón Atrás/Adelante (no vuelve a pushear).
- */
-function showSection(sectionId, fromHistory) {
-  if (!sectionId) sectionId = 'home';
-  const el = document.getElementById(sectionId);
-  if (!el) sectionId = 'home';
-
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  const section = document.getElementById(sectionId);
-  if (section) section.classList.add('active');
-
-  closeMobileNav();
-
-  // Historial: permite botón atrás del sistema / navegador
-  if (!fromHistory) {
-    const current = (history.state && history.state.section) || '';
-    if (current !== sectionId) {
-      try {
-        history.pushState({ section: sectionId }, '', '#' + sectionId);
-      } catch (err) {
-        console.warn(err);
-      }
-    } else {
-      try {
-        history.replaceState({ section: sectionId }, '', '#' + sectionId);
-      } catch (err) { /* ignore */ }
-    }
-  } else {
-    try {
-      history.replaceState({ section: sectionId }, '', '#' + sectionId);
-    } catch (err) { /* ignore */ }
-  }
-
-  if (sectionId === 'search') {
-    realizarBusqueda();
-  }
-
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Botón atrás / adelante del navegador o del sistema (PWA)
-window.addEventListener('popstate', (e) => {
-  const sectionId = (e.state && e.state.section) || 'home';
-  // Si no hay estado (salida de la app), quedarnos en inicio en lugar de cerrar
-  if (!e.state) {
-    history.pushState({ section: 'home' }, '', '#home');
-    showSection('home', true);
-    return;
-  }
-  showSection(sectionId, true);
-});
-
-function toggleMenu() {
-  const nav = document.getElementById('navLinks');
-  if (!nav) return;
-  nav.classList.toggle('open');
-  // Al abrir el menú hamburguesa, cerrar dropdown de usuario
-  if (!nav.classList.contains('open')) closeUserMenu();
-}
-
-function irAMiPerfil(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-  closeMobileNav();
-  const user = getCurrentUser();
-  if (!user) {
-    showToast('Iniciá sesión para ver tu perfil', 'error');
-    showSection('login');
-    return;
-  }
-  if (user.tipo === 'oficio') {
-    showMyProfile(false);
-  } else {
-    abrirEditarPerfil();
-  }
-}
-
-function irANotificaciones(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-  closeMobileNav();
-  showNotifications();
-}
-
-function irAEditarPerfil(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-  closeMobileNav();
-  abrirEditarPerfil();
-}
-
-window.irAMiPerfil = irAMiPerfil;
-window.irANotificaciones = irANotificaciones;
-window.irAEditarPerfil = irAEditarPerfil;
-
-function getUserIniciales(nombre) {
-  if (!nombre) return '?';
-  return nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-}
-
-function updateNav() {
-  const user = getCurrentUser();
-  const navRegister = document.getElementById('navRegister');
-  const navLogin = document.getElementById('navLogin');
-  const navNotifications = document.getElementById('navNotifications');
-  const navUserMenu = document.getElementById('navUserMenu');
-  const navMyProfileLink = document.getElementById('navMyProfileLink');
-
-  closeUserMenu();
-
-  if (user) {
-    if (navRegister) navRegister.style.display = 'none';
-    if (navLogin) navLogin.style.display = 'none';
-    if (navUserMenu) navUserMenu.style.display = 'block';
-    if (navMyProfileLink) navMyProfileLink.style.display = 'block';
-
-    const iniciales = getUserIniciales(user.nombre);
-    const firstName = (user.nombre || '').split(' ')[0];
-    const avatar = document.getElementById('userAvatar');
-    const avatarDrop = document.getElementById('userAvatarDrop');
-    const nameEl = document.getElementById('userMenuName');
-    const dropName = document.getElementById('userDropName');
-    const dropRole = document.getElementById('userDropRole');
-
-    if (avatar) {
-      if (user.fotoPerfil) {
-        avatar.innerHTML = `<img src="${user.fotoPerfil}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-      } else {
-        avatar.textContent = iniciales;
-      }
-    }
-    if (avatarDrop) {
-      if (user.fotoPerfil) {
-        avatarDrop.innerHTML = `<img src="${user.fotoPerfil}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-      } else {
-        avatarDrop.textContent = iniciales;
-      }
-    }
-    if (nameEl) nameEl.textContent = firstName;
-    if (dropName) dropName.textContent = user.nombre;
-    if (dropRole) dropRole.textContent = user.tipo === 'oficio' ? (user.oficio || 'Profesional') : 'Cliente';
-
-    const menuMyProfile = document.getElementById('menuMyProfile');
-    const menuNotifs = document.getElementById('menuNotifs');
-
-    if (user.tipo === 'oficio') {
-      if (navNotifications) navNotifications.style.display = 'block';
-      if (menuMyProfile) menuMyProfile.style.display = 'flex';
-      if (menuNotifs) menuNotifs.style.display = 'flex';
-      updateNotifBadge();
-    } else {
-      if (navNotifications) navNotifications.style.display = 'none';
-      if (menuMyProfile) menuMyProfile.style.display = 'none';
-      if (menuNotifs) menuNotifs.style.display = 'none';
-    }
-  } else {
-    if (navRegister) navRegister.style.display = 'block';
-    if (navLogin) navLogin.style.display = 'block';
-    if (navUserMenu) navUserMenu.style.display = 'none';
-    if (navNotifications) navNotifications.style.display = 'none';
-    if (navMyProfileLink) navMyProfileLink.style.display = 'none';
-  }
-}
-
-function toggleUserMenu(e) {
-  if (e) e.stopPropagation();
-  const menu = document.getElementById('navUserMenu');
-  if (!menu) return;
-  menu.classList.toggle('open');
-}
-
-function closeUserMenu() {
-  const menu = document.getElementById('navUserMenu');
-  if (menu) menu.classList.remove('open');
-}
-
-function abrirEditarPerfil() {
-  closeUserMenu();
-  const user = getCurrentUser();
-  if (!user) {
-    showSection('login');
-    return;
-  }
-
-  // Profesionales: abrir perfil en modo edición
-  if (user.tipo === 'oficio') {
-    showMyProfile(true);
-    return;
-  }
-
-  // Clientes: sección de cuenta
-  document.getElementById('accNombre').value = user.nombre || '';
-  document.getElementById('accEmail').value = user.email || '';
-  document.getElementById('accTelefono').value = user.telefono || '';
-  const av = document.getElementById('clientProfileAvatar');
-  const title = document.getElementById('clientProfileTitle');
-  if (av) av.textContent = getUserIniciales(user.nombre);
-  if (title) title.textContent = user.nombre || 'Mi cuenta';
-
-  const provSel = document.getElementById('accProvincia');
-  if (provSel && provSel.options.length <= 1) {
-    LISTA_PROVINCIAS.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = p;
-      provSel.appendChild(opt);
-    });
-  }
-  if (provSel) {
-    provSel.value = user.provincia || '';
-    cargarLocalidades('accProvincia', 'accLocalidad', user.localidad || '');
-  }
-
-  document.getElementById('accClienteFields').style.display = 'block';
-  document.getElementById('accOficioHint').style.display = 'none';
-  showSection('editAccount');
-}
-
-async function guardarCuenta(e) {
-  e.preventDefault();
-  const user = getCurrentUser();
-  if (!user) return;
-
-  try {
-    const data = {
-      nombre: document.getElementById('accNombre').value.trim(),
-      telefono: document.getElementById('accTelefono').value.trim()
-    };
-    if (user.tipo === 'cliente') {
-      data.provincia = document.getElementById('accProvincia').value;
-      data.localidad = document.getElementById('accLocalidad').value;
-    }
-    await db.collection('users').doc(user.id).update(data);
-    currentUserCache = { ...user, ...data };
-    updateNav();
-    showToast('Perfil actualizado correctamente');
-    showSection('home');
-  } catch (err) {
-    console.error(err);
-    showToast('Error al guardar el perfil', 'error');
-  }
-}
-
-// Cerrar menú de usuario al hacer clic fuera (con delay para no anular el tap en móvil)
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('navUserMenu');
-  if (!menu || !menu.classList.contains('open')) return;
-  if (menu.contains(e.target)) return;
-  setTimeout(() => closeUserMenu(), 10);
-});
-
-window.toggleUserMenu = toggleUserMenu;
-window.closeUserMenu = closeUserMenu;
-window.abrirEditarPerfil = abrirEditarPerfil;
-window.guardarCuenta = guardarCuenta;
-
-async function updateNotifBadge() {
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'oficio' || !firebaseReady) return;
-
-  try {
-    const notifs = await getNotifications(user.id);
-    const unread = notifs.filter(n => !n.read).length;
-    const badge = document.getElementById('notifBadge');
-    if (!badge) return;
-    if (unread > 0) {
-      badge.style.display = 'flex';
-      badge.textContent = unread > 9 ? '9+' : unread;
-    } else {
-      badge.style.display = 'none';
-    }
-  } catch (e) {
-    console.warn(e);
-  }
-}
-
-// ===== TOAST =====
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type} show`;
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 3500);
-}
-
-// ===== REGISTER =====
-function switchRegisterTab(tipo) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.register-form').forEach(f => f.classList.remove('active'));
-  
-  if (tipo === 'cliente') {
-    document.querySelector('.tab-btn:first-child').classList.add('active');
-    document.getElementById('formCliente').classList.add('active');
-  } else {
-    document.querySelector('.tab-btn:last-child').classList.add('active');
-    document.getElementById('formOficio').classList.add('active');
-  }
-}
-
-async function registrarCliente(e) {
-  e.preventDefault();
-  try {
-    requireFirebase();
-  } catch (err) {
-    return;
-  }
-
-  const email = document.getElementById('clienteEmail').value.trim().toLowerCase();
-  const password = document.getElementById('clientePass').value;
-
-  authBusy = true;
-  try {
-    showToast('Creando cuenta...');
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    const uid = cred.user.uid;
-
-    const perfil = {
-      tipo: 'cliente',
-      nombre: document.getElementById('clienteNombre').value.trim(),
-      email: email,
-      telefono: document.getElementById('clienteTelefono').value.trim(),
-      localidad: document.getElementById('clienteLocalidad').value,
-      provincia: document.getElementById('clienteProvincia').value,
-      createdAt: new Date().toISOString()
-    };
-
-    await db.collection('users').doc(uid).set(perfil);
-
-    try {
-      await enviarEmailVerificacion(cred.user);
-      showToast('Te enviamos un email de verificación. Revisá bandeja de entrada y spam.');
-    } catch (verErr) {
-      console.error('Error al enviar verificación:', verErr);
-      showToast(verErr.message || 'Cuenta creada, pero no se pudo enviar el email. Usá Reenviar correo.', 'error');
-    }
-
-    currentUserCache = { id: uid, ...perfil, email };
-    sessionStorage.setItem('oficiosya_uid', uid);
-    e.target.reset();
-    mostrarPantallaVerificacion(email);
-  } catch (err) {
-    console.error(err);
-    currentUserCache = null;
-    if (err.code === 'auth/email-already-in-use') {
-      showToast('Ya existe una cuenta con ese email', 'error');
-    } else if (err.code === 'auth/weak-password') {
-      showToast('La contraseña debe tener al menos 6 caracteres', 'error');
-    } else {
-      showToast(err.message || 'Error al registrarse', 'error');
-    }
-  } finally {
-    authBusy = false;
-    updateNav();
-  }
-}
-
-async function registrarOficio(e) {
-  e.preventDefault();
-  try {
-    requireFirebase();
-  } catch (err) {
-    return;
-  }
-
-  const email = document.getElementById('oficioEmail').value.trim().toLowerCase();
-  const password = document.getElementById('oficioPass').value;
-  const dni = document.getElementById('oficioDni').value.trim().replace(/\D/g, '');
-
-  if (dni.length < 7 || dni.length > 8) {
-    showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
-    return;
-  }
-
-  const fechaNac = document.getElementById('oficioFechaNacimiento').value;
-  const edadCalc = calcularEdad(fechaNac);
-  if (!fechaNac || edadCalc === null) {
-    showToast('Ingresá una fecha de nacimiento válida', 'error');
-    return;
-  }
-  if (edadCalc < 18) {
-    showToast('Debés ser mayor de 18 años para registrarte como profesional', 'error');
-    return;
-  }
-
-  const fotoInput = document.getElementById('oficioFotoPerfil');
-  if (!oficioFotoPerfilDataUrl && (!fotoInput || !fotoInput.files || !fotoInput.files[0])) {
-    showToast('La foto de perfil es obligatoria para profesionales', 'error');
-    return;
-  }
-
-  authBusy = true;
-  try {
-    // Verificar DNI único
-    const dniSnap = await db.collection('users').where('dni', '==', dni).limit(1).get();
-    if (!dniSnap.empty) {
-      showToast('Ya existe un profesional registrado con ese DNI', 'error');
-      return;
-    }
-
-    if (!oficioFotoPerfilDataUrl && fotoInput.files[0]) {
-      const file = fotoInput.files[0];
-      oficioFotoPerfilDataUrl = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
-    }
-    if (!oficioFotoPerfilDataUrl) {
-      showToast('La foto de perfil es obligatoria para profesionales', 'error');
-      return;
-    }
-
-    showToast('Creando cuenta profesional...');
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    const uid = cred.user.uid;
-
-    // Guardar perfil YA (así onAuthStateChanged encuentra el documento)
-    const perfil = {
-      tipo: 'oficio',
-      nombre: document.getElementById('oficioNombre').value.trim(),
-      email: email,
-      telefono: document.getElementById('oficioTelefono').value.trim(),
-      dni: dni,
-      oficio: document.getElementById('oficioTipo').value,
-      experiencia: parseInt(document.getElementById('oficioExperiencia').value) || 0,
-      fechaNacimiento: document.getElementById('oficioFechaNacimiento').value,
-      edad: calcularEdad(document.getElementById('oficioFechaNacimiento').value),
-      domicilio: document.getElementById('oficioDomicilio').value.trim(),
-      localidad: document.getElementById('oficioLocalidad').value,
-      provincia: document.getElementById('oficioProvincia').value,
-      descripcion: (document.getElementById('oficioDescripcion').value || '').trim(),
-      fotoPerfil: '',
-      fotos: [],
-      createdAt: new Date().toISOString()
-    };
-
-    await db.collection('users').doc(uid).set(perfil);
-    currentUserCache = { id: uid, ...perfil, email };
-    sessionStorage.setItem('oficiosya_uid', uid);
-    updateNav();
-
-    // Subir foto y actualizar perfil
-    try {
-      showToast('Subiendo foto de perfil...');
-      const fotoPerfilUrl = await uploadImage(`users/${uid}/perfil.jpg`, oficioFotoPerfilDataUrl);
-      await db.collection('users').doc(uid).update({ fotoPerfil: fotoPerfilUrl });
-      currentUserCache = { ...currentUserCache, fotoPerfil: fotoPerfilUrl };
-    } catch (upErr) {
-      console.error(upErr);
-      showToast('Cuenta creada, pero la foto no se subió. Podés cargarla en Mi Perfil.', 'error');
-    }
-
-    oficioFotoPerfilDataUrl = null;
-
-    try {
-      await enviarEmailVerificacion(cred.user);
-      showToast('Te enviamos un email de verificación. Revisá bandeja de entrada y spam.');
-    } catch (verErr) {
-      console.error('Error al enviar verificación:', verErr);
-      showToast(verErr.message || 'Cuenta creada, pero no se pudo enviar el email. Usá Reenviar correo.', 'error');
-    }
-
-    currentUserCache = { id: uid, ...perfil, email };
-    sessionStorage.setItem('oficiosya_uid', uid);
-    e.target.reset();
-    const prev = document.getElementById('oficioFotoPreview');
-    if (prev) prev.innerHTML = '<i class="fas fa-user-circle"></i><span>Sin foto</span>';
-    mostrarPantallaVerificacion(email);
-  } catch (err) {
-    console.error(err);
-    currentUserCache = null;
-    if (err.code === 'auth/email-already-in-use') {
-      showToast('Ya existe una cuenta con ese email', 'error');
-    } else if (err.code === 'auth/weak-password') {
-      showToast('La contraseña debe tener al menos 6 caracteres', 'error');
-    } else {
-      showToast(err.message || 'Error al registrarse', 'error');
-    }
-  } finally {
-    authBusy = false;
-    updateNav();
-  }
-}
-
-
-
-/** Envía el mail de verificación con reintentos y mensajes claros */
-async function enviarEmailVerificacion(user) {
-  if (!user) throw new Error('No hay usuario para verificar');
-  try {
-    // Sin URL de retorno: evita auth/unauthorized-continue-uri si el dominio
-    // (GitHub Pages, etc.) aún no está en Authorized domains.
-    // La app detecta la verificación por polling mientras la sesión sigue abierta.
-    await user.sendEmailVerification();
-    console.log('Email de verificación enviado');
-    return true;
-  } catch (err) {
-    console.error('Error al enviar verificación:', err.code, err.message);
-    const code = err.code || '';
-    if (code === 'auth/too-many-requests') {
-      throw new Error('Firebase bloqueó los envíos por muchos intentos. Esperá 15–30 minutos y usá “Reenviar correo”.');
-    }
-    if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
-      throw new Error('Dominio no autorizado en Firebase. Authentication → Settings → Authorized domains.');
-    }
-    throw new Error(err.message || 'No se pudo enviar el email de verificación');
-  }
-}
-
-// ===== VERIFICACIÓN DE EMAIL (pantalla de espera + auto login) =====
-let verifyPollTimer = null;
-
-function detenerPollVerificacion() {
-  if (verifyPollTimer) {
-    clearInterval(verifyPollTimer);
-    verifyPollTimer = null;
-  }
-}
-
-function mostrarPantallaVerificacion(email) {
-  const el = document.getElementById('verifyEmailAddress');
-  if (el) el.textContent = email || (auth.currentUser && auth.currentUser.email) || '—';
-  showSection('verifyEmail');
-  iniciarPollVerificacion();
-}
-
-function iniciarPollVerificacion() {
-  detenerPollVerificacion();
-  // Consulta cada 3 s si el usuario ya confirmó el mail
-  verifyPollTimer = setInterval(() => {
-    comprobarVerificacionEmail(true);
-  }, 3000);
-  // Primera chequeo inmediato
-  setTimeout(() => comprobarVerificacionEmail(true), 800);
-}
-
-async function continuarTrasVerificacion() {
-  detenerPollVerificacion();
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) {
-    showSection('login');
-    return;
-  }
-  try {
-    const profile = await loadUserProfileWithRetry(firebaseUser.uid);
-    if (!profile) {
-      showToast('Perfil no encontrado. Intentá iniciar sesión.', 'error');
-      showSection('login');
-      return;
-    }
-    currentUserCache = { id: firebaseUser.uid, ...profile, email: firebaseUser.email };
-    sessionStorage.setItem('oficiosya_uid', firebaseUser.uid);
-    updateNav();
-    showToast('¡Email verificado! Bienvenido/a.');
-    if (profile.tipo === 'oficio') {
-      showMyProfile(false);
-    } else {
-      showSection('search');
-    }
-  } catch (err) {
-    console.error(err);
-    showSection('login');
-  }
-}
-
-/** silent=true cuando lo llama el polling (sin toasts de error) */
-async function comprobarVerificacionEmail(silent) {
-  try {
-    if (!firebaseReady || !auth.currentUser) {
-      if (!silent) {
-        showToast('No hay sesión activa. Iniciá sesión con tu email y contraseña.', 'error');
-        showSection('login');
-      }
-      return false;
-    }
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) {
-      await continuarTrasVerificacion();
-      return true;
-    }
-    if (!silent) {
-      showToast('Aún no confirmamos la verificación. Revisá tu correo o esperá unos segundos.');
-    }
-    return false;
-  } catch (err) {
-    console.error(err);
-    if (!silent) showToast('No se pudo comprobar el estado del email', 'error');
-    return false;
-  }
-}
-
-window.comprobarVerificacionEmail = comprobarVerificacionEmail;
-window.mostrarPantallaVerificacion = mostrarPantallaVerificacion;
-
-/** Procesa el link de verificación si el usuario vuelve a la app con oobCode */
-async function procesarLinkVerificacionEmail() {
-  if (!firebaseReady) return;
-  const params = new URLSearchParams(window.location.search);
-  const mode = params.get('mode');
-  const oobCode = params.get('oobCode');
-  if (mode === 'verifyEmail' && oobCode) {
-    try {
-      await auth.applyActionCode(oobCode);
-      showToast('¡Email verificado correctamente!');
-      // Limpiar query de la URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          await continuarTrasVerificacion();
-        }
-      } else {
-        showSection('login');
-        showToast('Email verificado. Ahora podés iniciar sesión.');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('El enlace de verificación no es válido o ya fue usado.', 'error');
-      showSection('login');
-    }
-  }
-}
-
-
-// ===== LOGIN / LOGOUT =====
-async function iniciarSesion(e) {
-  e.preventDefault();
-  try {
-    requireFirebase();
-  } catch (err) {
-    return;
-  }
-
-  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  const pass = document.getElementById('loginPass').value;
-  const remember = document.getElementById('loginRemember')?.checked;
-
-  try {
-    showToast('Ingresando...');
-    const cred = await auth.signInWithEmailAndPassword(email, pass);
-
-    // Solo bloquea si NUNCA verificó el mail del registro.
-    // Cuando ya lo verificó, emailVerified es true y entra normal (sin volver a verificar).
-    await cred.user.reload();
-    if (!cred.user.emailVerified) {
-      // Mantener sesión y mostrar pantalla de espera (auto-ingreso al verificar)
-      currentUserCache = null;
-      updateNav();
-      mostrarPantallaVerificacion(email);
-      showToast('Todavía falta verificar tu email. Revisá tu correo.');
-      return;
-    }
-    detenerPollVerificacion();
-
-    const profile = await loadUserProfileWithRetry(cred.user.uid);
-    if (!profile) {
-      showToast('No se encontró el perfil de usuario', 'error');
-      await auth.signOut();
-      return;
-    }
-    currentUserCache = { id: cred.user.uid, ...profile, email: cred.user.email };
-    if (remember) {
-      localStorage.setItem('oficiosya_remember', JSON.stringify({ email, pass }));
-    } else {
-      localStorage.removeItem('oficiosya_remember');
-    }
-    updateNav();
-    showToast(`¡Bienvenido/a, ${(currentUserCache.nombre || '').split(' ')[0]}!`);
-    if (currentUserCache.tipo === 'oficio') {
-      showMyProfile(false);
-    } else {
-      showSection('search');
-    }
-  } catch (err) {
-    console.error(err);
-    showToast('Email o contraseña incorrectos', 'error');
-  }
-}
-
-async function reenviarVerificacionEmail() {
-  try {
-    requireFirebase();
-    const user = auth.currentUser;
-    if (user) {
-      await user.reload();
-      if (user.emailVerified) {
-        showToast('Tu email ya está verificado.');
-        await continuarTrasVerificacion();
-        return;
-      }
-      await enviarEmailVerificacion(user);
-      showToast('Email de verificación reenviado. Revisá bandeja de entrada y spam.');
-      return;
-    }
-    showToast('Para reenviar, iniciá sesión con tu email y contraseña (te llevaremos a la pantalla de espera).', 'error');
-    showSection('login');
-  } catch (err) {
-    console.error(err);
-    showToast('No se pudo reenviar el email. Intentá más tarde.', 'error');
-  }
-}
-
-window.reenviarVerificacionEmail = reenviarVerificacionEmail;
-
-function cargarCredencialesRecordadas() {
-  try {
-    const raw = localStorage.getItem('oficiosya_remember');
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    const emailEl = document.getElementById('loginEmail');
-    const passEl = document.getElementById('loginPass');
-    const rememberEl = document.getElementById('loginRemember');
-    if (emailEl && data.email) emailEl.value = data.email;
-    if (passEl && data.pass) passEl.value = data.pass;
-    if (rememberEl) rememberEl.checked = true;
-  } catch (e) {
-    console.warn(e);
-  }
-}
-
-async function logout() {
-  closeUserMenu();
-  try {
-    if (firebaseReady) await auth.signOut();
-  } catch (e) {
-    console.error(e);
-  }
-  currentUserCache = null;
-  updateNav();
-  showToast('Sesión cerrada correctamente');
-  showSection('home');
-}
-
-// ===== SEARCH =====
-function quickSearch(oficio) {
-  showSection('search');
-  document.getElementById('filterOficio').value = oficio;
-  document.getElementById('filterProvincia').value = '';
-  cargarLocalidades('filterProvincia', 'filterLocalidad');
-  realizarBusqueda();
-}
-
-async function realizarBusqueda() {
-  const oficio = document.getElementById('filterOficio').value;
-  const localidad = document.getElementById('filterLocalidad').value;
-  const provincia = document.getElementById('filterProvincia').value;
-  const container = document.getElementById('resultados');
-  const noRes = document.getElementById('noResultados');
-
-  if (!firebaseReady) {
-    container.innerHTML = '';
-    noRes.style.display = 'block';
-    noRes.innerHTML = '<p>Configurá Firebase para buscar profesionales.</p>';
-    return;
-  }
-
-  container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:2rem;">Buscando...</p>';
-  noRes.style.display = 'none';
-
-  try {
-    let users = await getProfesionales();
-
-    let resultados = users.filter(u => {
-      if (oficio && u.oficio !== oficio) return false;
-      if (provincia && u.provincia !== provincia) return false;
-      if (localidad && u.localidad !== localidad && !(u.domicilio || '').toLowerCase().includes(localidad.toLowerCase())) return false;
-      return true;
-    });
-
-    if (resultados.length === 0) {
-      container.innerHTML = '';
-      noRes.style.display = 'block';
-      noRes.innerHTML = '<i class="fas fa-search"></i><p>No se encontraron profesionales con esos filtros.</p>';
-      return;
-    }
-
-    noRes.style.display = 'none';
-    const allReviews = await getReviews();
-
-    container.innerHTML = resultados.map(p => {
-      const avg = getAverageRatingFromList(allReviews, p.id);
-      const starsHtml = renderStars(avg.promedio);
-      const iniciales = (p.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
-      return `
-        <div class="prof-card">
-          <div class="prof-header">
-            <div class="prof-avatar">${(p.fotoPerfil || '').trim() ? `<img src="${(p.fotoPerfil || '').trim()}" alt="${p.nombre || ''}" referrerpolicy="no-referrer">` : iniciales}</div>
-            <div class="prof-header-info">
-              <h3>${p.nombre}</h3>
-              <span class="oficio-tag">${p.oficio}</span>
-            </div>
-          </div>
-          <div class="prof-body">
-            <div class="prof-meta">
-              <span><i class="fas fa-map-marker-alt"></i> ${p.localidad}, ${p.provincia}</span>
-              <span><i class="fas fa-briefcase"></i> ${p.experiencia || 0} años exp.</span>
-            </div>
-            <div class="prof-rating">
-              ${starsHtml}
-              <span style="color:var(--text-light);font-size:0.9rem;">(${avg.count} reseñas)</span>
-            </div>
-            <p style="font-size:0.9rem;color:var(--text-light);">${p.descripcion ? p.descripcion.substring(0, 100) + (p.descripcion.length > 100 ? '...' : '') : 'Sin descripción'}</p>
-          </div>
-          <div class="prof-actions">
-            <button class="btn btn-primary btn-sm" onclick="verPerfil('${p.id}')">
-              <i class="fas fa-user"></i> Ver perfil
-            </button>
-            <a href="tel:${p.telefono}" class="btn btn-secondary btn-sm">
-              <i class="fas fa-phone"></i> Llamar
-            </a>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (err) {
-    console.error(err);
-    container.innerHTML = '';
-    noRes.style.display = 'block';
-    noRes.innerHTML = '<p>Error al buscar. Revisá la configuración de Firebase.</p>';
-  }
-}
-
-// ===== RATINGS =====
-function getAverageRatingFromList(reviewsAll, profId) {
-  const reviews = reviewsAll.filter(r => r.profId === profId);
-  if (reviews.length === 0) return { promedio: 0, count: 0, calidad: 0, tiempo: 0, precio: 0 };
-
-  const sumCalidad = reviews.reduce((a, r) => a + r.calidad, 0);
-  const sumTiempo = reviews.reduce((a, r) => a + r.tiempo, 0);
-  const sumPrecio = reviews.reduce((a, r) => a + r.precio, 0);
-  const total = reviews.length;
-  const promedio = ((sumCalidad + sumTiempo + sumPrecio) / (total * 3)).toFixed(1);
-
-  return {
-    promedio: parseFloat(promedio),
-    count: total,
-    calidad: (sumCalidad / total).toFixed(1),
-    tiempo: (sumTiempo / total).toFixed(1),
-    precio: (sumPrecio / total).toFixed(1)
-  };
-}
-
-async function getAverageRating(profId) {
-  const reviews = await getReviewsByProf(profId);
-  return getAverageRatingFromList(reviews, profId);
-}
-
-function renderStars(rating) {
-  let html = '<span class="stars">';
-  const full = Math.floor(rating);
-  const half = rating % 1 >= 0.5;
-  
-  for (let i = 1; i <= 5; i++) {
-    if (i <= full) {
-      html += '<i class="fas fa-star"></i>';
-    } else if (i === full + 1 && half) {
-      html += '<i class="fas fa-star-half-alt"></i>';
-    } else {
-      html += '<i class="far fa-star"></i>';
-    }
-  }
-  html += `</span> <strong>${rating > 0 ? rating : '—'}</strong>`;
-  return html;
-}
-
-// ===== PROFILE VIEW =====
-async function verPerfil(profId) {
-  let prof;
-  try {
-    const doc = await db.collection('users').doc(profId).get();
-    if (!doc.exists) {
-      showToast('Profesional no encontrado', 'error');
-      return;
-    }
-    prof = { id: doc.id, ...doc.data() };
-  } catch (err) {
-    console.error(err);
-    showToast('Error al cargar el perfil', 'error');
-    return;
-  }
-
-  const reviews = (await getReviewsByProf(profId)).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  const avg = getAverageRatingFromList(reviews, profId);
-  const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  const currentUser = getCurrentUser();
-  const puedeResenar = currentUser && currentUser.tipo === 'cliente';
-  
-  const fotoUrl = (prof.fotoPerfil || '').trim();
-  const fotoPerfilHtml = fotoUrl
-    ? `<img class="prof-photo" src="${fotoUrl}" alt="${prof.nombre || 'Profesional'}" width="120" height="120" loading="eager" referrerpolicy="no-referrer" onerror="this.onerror=null;this.style.display='none';this.insertAdjacentHTML('afterend','<div class=\'prof-photo-placeholder\'>${iniciales}</div>');">`
-    : `<div class="prof-photo-placeholder">${iniciales}</div>`;
-
-  let fotosHtml = '';
-  if (prof.fotos && prof.fotos.length > 0) {
-    fotosHtml = prof.fotos.map(f => `
-      <div class="prof-gallery-item">
-        <img src="${f}" alt="Trabajo de ${prof.nombre}" loading="lazy">
-      </div>
-    `).join('');
-  } else {
-    fotosHtml = `<div class="prof-gallery-empty"><i class="fas fa-images" style="font-size:2rem;opacity:0.4;display:block;margin-bottom:0.5rem;"></i>Aún no hay fotos de trabajos publicados.</div>`;
-  }
-
-  let reviewsHtml = '';
-  if (reviews.length > 0) {
-    reviewsHtml = reviews.map(r => `
-      <div class="review-card">
-        <div class="review-header">
-          <span class="review-author">${r.clienteNombre}</span>
-          <span style="font-size:0.85rem;color:var(--text-light);">${formatDate(r.fecha)}</span>
-        </div>
-        <div class="review-ratings">
-          <span>Calidad: <span class="stars">${'★'.repeat(r.calidad)}${'☆'.repeat(5 - r.calidad)}</span></span>
-          <span>Tiempo: <span class="stars">${'★'.repeat(r.tiempo)}${'☆'.repeat(5 - r.tiempo)}</span></span>
-          <span>Precio: <span class="stars">${'★'.repeat(r.precio)}${'☆'.repeat(5 - r.precio)}</span></span>
-        </div>
-        <p class="review-text">${r.comentario}</p>
-      </div>
-    `).join('');
-  } else {
-    reviewsHtml = '<p style="color:var(--text-light);">Todavía no hay reseñas. ¡Sé el primero en comentar!</p>';
-  }
-
-  const bar = (val) => Math.min(100, (parseFloat(val) || 0) * 20);
-
-  const content = `
-    <div class="prof-profile">
-      <div class="prof-hero">
-        <div class="prof-hero-top">
-          ${fotoPerfilHtml}
-          <div class="prof-hero-info">
-            <h1>${prof.nombre}</h1>
-            <div class="prof-badge-row">
-              <span class="prof-chip accent"><i class="fas fa-briefcase"></i> ${prof.oficio || 'Profesional'}</span>
-              <span class="prof-chip"><i class="fas fa-star"></i> ${avg.promedio > 0 ? avg.promedio + ' / 5' : 'Sin valoraciones'}</span>
-            </div>
-            <div class="prof-hero-meta">
-              <span><i class="fas fa-map-marker-alt"></i> ${prof.localidad || ''}, ${prof.provincia || ''}</span>
-              <span><i class="fas fa-clock"></i> ${prof.experiencia || 0} años de experiencia</span>
-              <span><i class="fas fa-phone"></i> ${prof.telefono || '—'}</span>
-            </div>
-          </div>
-        </div>
-        <div class="prof-score-bar">
-          <div class="prof-score-item"><span class="val">${avg.promedio || '—'}</span><span class="lbl">Promedio</span></div>
-          <div class="prof-score-item"><span class="val">${avg.count}</span><span class="lbl">Reseñas</span></div>
-          <div class="prof-score-item"><span class="val">${prof.experiencia || 0}</span><span class="lbl">Años exp.</span></div>
-          <div class="prof-score-item"><span class="val">${(prof.fotos || []).length}</span><span class="lbl">Trabajos</span></div>
-        </div>
-      </div>
-
-      <div class="prof-grid">
-        <div class="prof-card-block">
-          <h3><i class="fas fa-id-card"></i> Información de contacto</h3>
-          <div class="prof-info-list">
-            <div class="prof-info-row"><span class="k"><i class="fas fa-map"></i> Zona</span><span class="v">${prof.domicilio || '—'}</span></div>
-            <div class="prof-info-row"><span class="k"><i class="fas fa-city"></i> Localidad</span><span class="v">${prof.localidad || '—'}</span></div>
-            <div class="prof-info-row"><span class="k"><i class="fas fa-flag"></i> Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
-            <div class="prof-info-row"><span class="k"><i class="fas fa-phone"></i> Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
-            <div class="prof-info-row"><span class="k"><i class="fas fa-birthday-cake"></i> Edad</span><span class="v">${(() => { const e = edadDesdePerfil(prof); return e !== null ? e + ' años' : '—'; })()}</span></div>
-          </div>
-          ${prof.descripcion ? `<div style="margin-top:1.2rem;"><h3><i class="fas fa-quote-left"></i> Sobre el profesional</h3><p class="prof-about">${prof.descripcion}</p></div>` : ''}
-        </div>
-        <div class="prof-card-block">
-          <h3><i class="fas fa-chart-bar"></i> Valoraciones</h3>
-          <div class="avg-rating" style="margin-bottom:1rem;">${renderStars(avg.promedio)} <span style="color:var(--text-light);font-size:0.9rem;">(${avg.count})</span></div>
-          ${avg.count > 0 ? `
-            <div class="prof-rating-bars">
-              <div class="prof-rating-bar-row"><span>Calidad</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.calidad)}%"></div></div><strong>${avg.calidad}</strong></div>
-              <div class="prof-rating-bar-row"><span>Tiempo</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.tiempo)}%"></div></div><strong>${avg.tiempo}</strong></div>
-              <div class="prof-rating-bar-row"><span>Precio</span><div class="prof-rating-bar-track"><div class="prof-rating-bar-fill" style="width:${bar(avg.precio)}%"></div></div><strong>${avg.precio}</strong></div>
-            </div>
-          ` : '<p style="color:var(--text-light);">Sin valoraciones todavía.</p>'}
-        </div>
-      </div>
-
-      <div class="prof-card-block" style="margin-bottom:1.25rem;">
-        <h3><i class="fas fa-camera"></i> Galería de trabajos</h3>
-        <div class="prof-gallery">${fotosHtml}</div>
-      </div>
-
-      <div class="prof-card-block">
-        <h3><i class="fas fa-comments"></i> Opiniones de clientes</h3>
-        ${puedeResenar ? `
-          <button class="btn btn-primary" style="margin-bottom:1.2rem;" onclick="abrirModalResena('${prof.id}')">
-            <i class="fas fa-pen"></i> Dejar reseña
-          </button>
-        ` : currentUser ? '' : `
-          <p style="margin-bottom:1rem;color:var(--text-light);">
-            <a href="#" onclick="showSection('login')" style="color:var(--primary);font-weight:600;">Iniciá sesión</a> como cliente para dejar una reseña.
-          </p>
-        `}
-        ${reviewsHtml}
-      </div>
-
-      <div class="prof-actions-bar">
-        ${puedeResenar ? `
-          <button class="btn btn-primary" onclick="abrirModalPresupuesto('${prof.id}', '${(prof.nombre || '').replace(/'/g, "\\'")}')">
-            <i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto
-          </button>
-          <a class="btn btn-secondary" href="tel:${prof.telefono || ''}"><i class="fas fa-phone"></i> Llamar</a>
-        ` : !currentUser ? `
-          <button class="btn btn-primary" onclick="showSection('login')">
-            <i class="fas fa-sign-in-alt"></i> Iniciá sesión para contactar
-          </button>
-        ` : ''}
-        <button class="btn btn-secondary" onclick="showSection('search')">
-          <i class="fas fa-arrow-left"></i> Volver a la búsqueda
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('profileContent').innerHTML = content;
-  showSection('profile');
-}
-
-// ===== MY PROFILE (profesional logueado) =====
-async function showMyProfile(editMode) {
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'oficio') {
-    showSection('home');
-    return;
-  }
-  const isEdit = editMode === true;
-
-  let prof;
-  try {
-    const doc = await db.collection('users').doc(user.id).get();
-    if (!doc.exists) {
-      showToast('No se pudo cargar tu perfil', 'error');
-      return;
-    }
-    prof = { id: doc.id, ...doc.data() };
-    currentUserCache = { ...prof, email: user.email };
-  } catch (err) {
-    console.error(err);
-    showToast('Error al cargar el perfil', 'error');
-    return;
-  }
-
-  const reviews = (await getReviewsByProf(prof.id)).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  const avg = getAverageRatingFromList(reviews, prof.id);
-  const iniciales = (prof.nombre || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
-  const myFotoUrl = (prof.fotoPerfil || '').trim();
-  const fotoPerfilHtml = myFotoUrl
-    ? `<div class="my-photo-edit"><img class="prof-photo" src="${myFotoUrl}" alt="${prof.nombre || ''}" width="120" height="120" referrerpolicy="no-referrer" onerror="this.style.display='none';"><label class="change-photo-btn" title="Cambiar foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`
-    : `<div class="my-photo-edit"><div class="prof-photo-placeholder">${iniciales}</div><label class="change-photo-btn" title="Subir foto"><i class="fas fa-camera"></i><input type="file" accept="image/*" onchange="cambiarFotoPerfil(event)"></label></div>`;
-
-  let fotosHtml = '';
-  if (prof.fotos && prof.fotos.length > 0) {
-    fotosHtml = prof.fotos.map((f, i) => `
-      <div class="prof-gallery-item">
-        <img src="${f}" alt="Trabajo">
-        <button onclick="eliminarFoto(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.65);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    `).join('');
-  }
-
-  fotosHtml += `
-    <label class="photo-upload" style="aspect-ratio:1;border-radius:12px;">
-      <i class="fas fa-plus"></i>
-      <span style="font-size:0.8rem;">Agregar trabajo</span>
-      <input type="file" accept="image/*" onchange="subirFoto(event)">
-    </label>
-  `;
-
-  let reviewsHtml = '';
-  if (reviews.length > 0) {
-    reviewsHtml = reviews.map(r => `
-      <div class="review-card">
-        <div class="review-header">
-          <span class="review-author">${r.clienteNombre}</span>
-          <span style="font-size:0.85rem;color:var(--text-light);">${formatDate(r.fecha)}</span>
-        </div>
-        <div class="review-ratings">
-          <span>Calidad: <span class="stars">${'★'.repeat(r.calidad)}${'☆'.repeat(5 - r.calidad)}</span></span>
-          <span>Tiempo: <span class="stars">${'★'.repeat(r.tiempo)}${'☆'.repeat(5 - r.tiempo)}</span></span>
-          <span>Precio: <span class="stars">${'★'.repeat(r.precio)}${'☆'.repeat(5 - r.precio)}</span></span>
-        </div>
-        <p class="review-text">${r.comentario}</p>
-      </div>
-    `).join('');
-  } else {
-    reviewsHtml = '<p style="color:var(--text-light);">Todavía no recibiste reseñas.</p>';
-  }
-
-  const content = `
-    <div class="prof-profile">
-      <div class="prof-hero">
-        <div class="prof-hero-top">
-          ${fotoPerfilHtml}
-          <div class="prof-hero-info">
-            <h1>${prof.nombre}</h1>
-            <div class="prof-badge-row">
-              <span class="prof-chip accent"><i class="fas fa-briefcase"></i> ${prof.oficio || ''}</span>
-              <span class="prof-chip"><i class="fas fa-star"></i> ${avg.promedio > 0 ? avg.promedio + ' ★' : 'Sin valoraciones'}</span>
-            </div>
-            <div class="prof-hero-meta">
-              <span><i class="fas fa-map-marker-alt"></i> ${prof.localidad}, ${prof.provincia}</span>
-              <span><i class="fas fa-clock"></i> ${prof.experiencia} años exp.</span>
-            </div>
-          </div>
-        </div>
-        <div class="prof-score-bar">
-          <div class="prof-score-item"><span class="val">${avg.promedio || '—'}</span><span class="lbl">Promedio</span></div>
-          <div class="prof-score-item"><span class="val">${avg.count}</span><span class="lbl">Reseñas</span></div>
-          <div class="prof-score-item"><span class="val">${(prof.fotos || []).length}</span><span class="lbl">Trabajos</span></div>
-        </div>
-      </div>
-    
-    ${isEdit ? `
-    <div class="prof-card-block" style="margin-bottom:1.25rem;" id="editProfileBlock">
-      <h3><i class="fas fa-edit"></i> Editar información</h3>
-      <form onsubmit="actualizarPerfil(event)">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nombre</label>
-            <input type="text" id="editNombre" value="${prof.nombre || ''}" required>
-          </div>
-          <div class="form-group">
-            <label>DNI</label>
-            <input type="text" id="editDni" value="${prof.dni || ''}" required pattern="[0-9]{7,8}" maxlength="8" title="DNI sin puntos (7 u 8 dígitos)">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Teléfono</label>
-            <input type="tel" id="editTelefono" value="${prof.telefono || ''}" required>
-          </div>
-          <div class="form-group">
-            <label>Fecha de nacimiento</label>
-            <input type="date" id="editFechaNacimiento" value="${prof.fechaNacimiento || ''}" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Oficio</label>
-            <select id="editOficio" required>
-              ${['Plomería','Gasista','Electricista','Pintor','Albañil','Carpintero','Jardinero','Cerrajero'].map(o => 
-                `<option value="${o}" ${o === prof.oficio ? 'selected' : ''}>${o}</option>`
-              ).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Años de experiencia</label>
-            <input type="number" id="editExperiencia" value="${prof.experiencia || 0}" min="0" max="50" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Domicilio / Zona</label>
-            <input type="text" id="editDomicilio" value="${prof.domicilio || ''}" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Provincia</label>
-            <select id="editProvincia" required onchange="cargarLocalidades('editProvincia','editLocalidad')">
-              <option value="">Seleccionar provincia...</option>
-              ${LISTA_PROVINCIAS.map(p => 
-                `<option value="${p}" ${p === prof.provincia ? 'selected' : ''}>${p}</option>`
-              ).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Localidad</label>
-            <select id="editLocalidad" required>
-              <option value="">Seleccionar localidad...</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Descripción</label>
-          <textarea id="editDescripcion" rows="3">${prof.descripcion || ''}</textarea>
-        </div>
-        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-          <button type="submit" class="btn btn-primary">Guardar cambios</button>
-          <button type="button" class="btn btn-secondary" onclick="showMyProfile(false)">Cancelar</button>
-        </div>
-      </form>
-    </div>
-    ` : `
-    <div class="prof-card-block" style="margin-bottom:1.25rem;">
-      <h3><i class="fas fa-id-card"></i> Mi información</h3>
-      <div class="prof-info-list">
-        <div class="prof-info-row"><span class="k">Teléfono</span><span class="v">${prof.telefono || '—'}</span></div>
-        <div class="prof-info-row"><span class="k">DNI</span><span class="v">${prof.dni || '—'}</span></div>
-        <div class="prof-info-row"><span class="k">Zona</span><span class="v">${prof.domicilio || '—'}</span></div>
-        <div class="prof-info-row"><span class="k">Localidad</span><span class="v">${prof.localidad || '—'}</span></div>
-        <div class="prof-info-row"><span class="k">Provincia</span><span class="v">${prof.provincia || '—'}</span></div>
-        <div class="prof-info-row"><span class="k">Edad</span><span class="v">${(() => { const e = edadDesdePerfil(prof); return e !== null ? e + ' años' : '—'; })()}</span></div>
-      </div>
-      ${prof.descripcion ? `<p class="prof-about" style="margin-top:1rem;">${prof.descripcion}</p>` : ''}
-      <button type="button" class="btn btn-primary" style="margin-top:1.2rem;" onclick="showMyProfile(true)">
-        <i class="fas fa-user-edit"></i> Editar perfil
-      </button>
-    </div>
-    `}
-    
-    <div class="prof-card-block" style="margin-bottom:1.25rem;">
-      <h3><i class="fas fa-camera"></i> Galería de trabajos</h3>
-      <div class="prof-gallery">${fotosHtml}</div>
-    </div>
-
-    <div class="prof-card-block">
-      <h3><i class="fas fa-comments"></i> Reseñas recibidas (${reviews.length})</h3>
-      ${reviewsHtml}
-    </div>
-    </div>
-  `;
-
-  document.getElementById('myProfileContent').innerHTML = content;
-  if (isEdit) {
-    setMaxFechaNacimiento();
-    cargarLocalidades('editProvincia', 'editLocalidad', prof.localidad);
-    const block = document.getElementById('editProfileBlock');
-    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  showSection('myProfile');
-}
-
-async function actualizarPerfil(e) {
-  e.preventDefault();
-  const user = getCurrentUser();
-  if (!user) return;
-
-  const dni = document.getElementById('editDni').value.trim().replace(/\D/g, '');
-  if (dni.length < 7 || dni.length > 8) {
-    showToast('El DNI debe tener 7 u 8 dígitos numéricos', 'error');
-    return;
-  }
-
-  const fechaNacEdit = document.getElementById('editFechaNacimiento').value;
-  const edadCalcEdit = calcularEdad(fechaNacEdit);
-  if (!fechaNacEdit || edadCalcEdit === null) {
-    showToast('Ingresá una fecha de nacimiento válida', 'error');
-    return;
-  }
-  if (edadCalcEdit < 18) {
-    showToast('Debés ser mayor de 18 años', 'error');
-    return;
-  }
-
-  try {
-    const dniSnap = await db.collection('users').where('dni', '==', dni).get();
-    if (dniSnap.docs.some(d => d.id !== user.id)) {
-      showToast('Ya existe otro profesional con ese DNI', 'error');
-      return;
-    }
-
-    const data = {
-      nombre: document.getElementById('editNombre').value.trim(),
-      dni: dni,
-      telefono: document.getElementById('editTelefono').value.trim(),
-      oficio: document.getElementById('editOficio').value,
-      experiencia: parseInt(document.getElementById('editExperiencia').value),
-      fechaNacimiento: document.getElementById('editFechaNacimiento').value,
-      edad: calcularEdad(document.getElementById('editFechaNacimiento').value),
-      domicilio: document.getElementById('editDomicilio').value.trim(),
-      localidad: document.getElementById('editLocalidad').value,
-      provincia: document.getElementById('editProvincia').value,
-      descripcion: document.getElementById('editDescripcion').value.trim()
-    };
-
-    await db.collection('users').doc(user.id).update(data);
-    currentUserCache = { ...user, ...data };
-    showToast('Perfil actualizado correctamente');
-    showMyProfile();
-  } catch (err) {
-    console.error(err);
-    showToast('Error al guardar el perfil', 'error');
-  }
-}
-
-
-async function cambiarFotoPerfil(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const user = getCurrentUser();
-  if (!user) return;
-  if (!file.type.startsWith('image/')) {
-    showToast('Solo se permiten imágenes', 'error');
-    return;
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('Máximo 2MB', 'error');
-    return;
-  }
-  try {
-    showToast('Actualizando foto de perfil...');
-    const dataUrl = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
-    const url = await uploadImage(`users/${user.id}/perfil_${Date.now()}.jpg`, dataUrl);
-    await db.collection('users').doc(user.id).update({ fotoPerfil: url });
-    currentUserCache = { ...user, fotoPerfil: url };
-    showToast('Foto de perfil actualizada');
-    showMyProfile();
-  } catch (err) {
-    console.error(err);
-    showToast('Error al actualizar la foto', 'error');
-  }
-}
-window.cambiarFotoPerfil = cambiarFotoPerfil;
-
-async function subirFoto(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (!file.type.startsWith('image/')) {
-    showToast('Solo se permiten imágenes', 'error');
-    return;
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('La imagen es muy grande (máx 2MB)', 'error');
-    return;
-  }
-
-  const user = getCurrentUser();
-  if (!user) return;
-
-  try {
-    const doc = await db.collection('users').doc(user.id).get();
-    const fotos = (doc.data().fotos || []).slice();
-    if (fotos.length >= 8) {
-      showToast('Máximo 8 fotos por perfil', 'error');
-      return;
-    }
-
-    showToast('Subiendo foto...');
-    const reader = new FileReader();
-    reader.onload = async function (ev) {
-      try {
-        const url = await uploadImage(`users/${user.id}/fotos/${Date.now()}.jpg`, ev.target.result);
-        fotos.push(url);
-        await db.collection('users').doc(user.id).update({ fotos });
-        currentUserCache = { ...user, fotos };
-        showToast('Foto agregada correctamente');
-        showMyProfile();
-      } catch (err) {
-        console.error(err);
-        showToast('Error al subir la foto (revisá Storage en Firebase)', 'error');
-      }
-    };
-    reader.readAsDataURL(file);
-  } catch (err) {
-    console.error(err);
-    showToast('Error al subir la foto', 'error');
-  }
-}
-
-async function eliminarFoto(index) {
-  const user = getCurrentUser();
-  if (!user) return;
-
-  try {
-    const doc = await db.collection('users').doc(user.id).get();
-    const fotos = (doc.data().fotos || []).slice();
-    fotos.splice(index, 1);
-    await db.collection('users').doc(user.id).update({ fotos });
-    currentUserCache = { ...user, fotos };
-    showToast('Foto eliminada');
-    showMyProfile();
-  } catch (err) {
-    console.error(err);
-    showToast('Error al eliminar la foto', 'error');
-  }
-}
-
-// ===== REVIEWS =====
-let currentRatings = { calidad: 0, tiempo: 0, precio: 0 };
-
-function setupRatingStars() {
-  ['ratingCalidad', 'ratingTiempo', 'ratingPrecio'].forEach(id => {
-    const container = document.getElementById(id);
-    if (!container) return;
-    
-    container.querySelectorAll('i').forEach(star => {
-      star.addEventListener('click', () => {
-        const value = parseInt(star.dataset.value);
-        const key = id.replace('rating', '').toLowerCase();
-        currentRatings[key] = value;
-        
-        container.querySelectorAll('i').forEach(s => {
-          const v = parseInt(s.dataset.value);
-          s.className = v <= value ? 'fas fa-star active' : 'far fa-star';
-        });
-      });
-      
-      star.addEventListener('mouseenter', () => {
-        const value = parseInt(star.dataset.value);
-        container.querySelectorAll('i').forEach(s => {
-          const v = parseInt(s.dataset.value);
-          s.className = v <= value ? 'fas fa-star' : 'far fa-star';
-        });
-      });
-    });
-    
-    container.addEventListener('mouseleave', () => {
-      const key = id.replace('rating', '').toLowerCase();
-      const current = currentRatings[key];
-      container.querySelectorAll('i').forEach(s => {
-        const v = parseInt(s.dataset.value);
-        s.className = v <= current ? 'fas fa-star active' : 'far fa-star';
-      });
-    });
-  });
-}
-
-function abrirModalResena(profId) {
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'cliente') {
-    showToast('Debés iniciar sesión como cliente para dejar reseñas', 'error');
-    return;
-  }
-  
-  document.getElementById('reviewProfId').value = profId;
-  currentRatings = { calidad: 0, tiempo: 0, precio: 0 };
-  
-  // Reset stars
-  ['ratingCalidad', 'ratingTiempo', 'ratingPrecio'].forEach(id => {
-    document.getElementById(id).querySelectorAll('i').forEach(s => {
-      s.className = 'far fa-star';
-    });
-  });
-  document.getElementById('reviewComentario').value = '';
-  
-  document.getElementById('reviewModal').classList.add('active');
-}
-
-function cerrarModal() {
-  document.getElementById('reviewModal').classList.remove('active');
-}
-
-async function enviarResena(e) {
-  e.preventDefault();
-
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'cliente') return;
-
-  if (currentRatings.calidad === 0 || currentRatings.tiempo === 0 || currentRatings.precio === 0) {
-    showToast('Por favor calificá las tres categorías', 'error');
-    return;
-  }
-
-  const profId = document.getElementById('reviewProfId').value;
-  const comentario = document.getElementById('reviewComentario').value.trim();
-
-  try {
-    const existentes = await getReviewsByProf(profId);
-    if (existentes.find(r => r.clienteId === user.id)) {
-      showToast('Ya dejaste una reseña para este profesional', 'error');
-      return;
-    }
-
-    const nueva = {
-      profId: profId,
-      clienteId: user.id,
-      clienteNombre: user.nombre,
-      calidad: currentRatings.calidad,
-      tiempo: currentRatings.tiempo,
-      precio: currentRatings.precio,
-      comentario: comentario,
-      fecha: new Date().toISOString().split('T')[0]
-    };
-
-    await db.collection('reviews').add(nueva);
-    // La notificación la crea la Cloud Function onReviewCreated
-
-    cerrarModal();
-    showToast('¡Reseña enviada con éxito!');
-    verPerfil(profId);
-  } catch (err) {
-    console.error(err);
-    showToast('Error al enviar la reseña', 'error');
-  }
-}
-
-// ===== NOTIFICATIONS =====
-async function showNotifications() {
-  const user = getCurrentUser();
-  if (!user) {
-    showToast('Iniciá sesión para ver notificaciones', 'error');
-    showSection('login');
-    return;
-  }
-  if (user.tipo !== 'oficio') {
-    showToast('Las notificaciones están disponibles para profesionales', 'error');
-    return;
-  }
-
-  const container = document.getElementById('notificationsList');
-  if (!container) {
-    showToast('No se encontró la sección de notificaciones', 'error');
-    return;
-  }
-  container.innerHTML = '<p style="text-align:center;color:var(--text-light);">Cargando...</p>';
-  showSection('notifications');
-
-  try {
-    const notifs = await getNotifications(user.id);
-    await markNotificationsRead(user.id);
-    updateNotifBadge();
-
-    if (notifs.length === 0) {
-      container.innerHTML = `
-        <div class="empty-notifs">
-          <i class="fas fa-bell-slash"></i>
-          <p>No tenés notificaciones todavía.</p>
-          <p style="font-size:0.9rem;">Te avisaremos cuando dejen una reseña o te pidan un presupuesto.</p>
-        </div>
-      `;
-      return;
-    }
-
-    const quotes = await getQuotes();
-    container.innerHTML = notifs.map(n => {
-      const icon = n.tipo === 'presupuesto' ? 'fa-file-invoice-dollar' : 'fa-star';
-      let extra = '';
-      if (n.tipo === 'presupuesto' && n.quoteId) {
-        const q = quotes.find(x => x.id === n.quoteId);
-        if (q) {
-          const fotos = (q.fotos || []).map(f => `<img src="${f}" alt="foto" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;">`).join('');
-          extra = `
-            <p style="font-size:0.85rem;margin-top:0.4rem;"><strong>Contacto:</strong> ${q.telefono} · <strong>Urgencia:</strong> ${q.urgencia}</p>
-            ${fotos ? `<div style="margin-top:0.4rem;">${fotos}</div>` : ''}
-          `;
-        }
-      }
-      return `
-        <div class="notif-item ${n.read ? '' : 'unread'}">
-          <div class="notif-icon">
-            <i class="fas ${icon}"></i>
-          </div>
-          <div class="notif-content">
-            <p><strong>${n.mensaje}</strong></p>
-            ${n.detalle ? `<p style="font-size:0.9rem;color:var(--text-light);">${n.detalle}</p>` : ''}
-            ${extra}
-            <span class="notif-time">${formatDateTime(n.fecha)}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (err) {
-    console.error(err);
-    container.innerHTML = '<p style="text-align:center;color:var(--text-light);">Error al cargar notificaciones.</p>';
-  }
-}
-
-// ===== UTILS =====
-function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatDateTime(isoStr) {
-  const d = new Date(isoStr);
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-/** Calcula edad a partir de YYYY-MM-DD */
-function calcularEdad(fechaNacimiento) {
-  if (!fechaNacimiento) return null;
-  const str = String(fechaNacimiento);
-  const nac = new Date(str.length <= 10 ? str + 'T12:00:00' : str);
-  if (isNaN(nac.getTime())) return null;
-  const hoy = new Date();
-  let edad = hoy.getFullYear() - nac.getFullYear();
-  const m = hoy.getMonth() - nac.getMonth();
-  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
-  return edad >= 0 ? edad : null;
-}
-
-function formatFechaNacimiento(fecha) {
-  if (!fecha) return '—';
-  const str = String(fecha);
-  const d = new Date(str.length <= 10 ? str + 'T12:00:00' : str);
-  if (isNaN(d.getTime())) return fecha;
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-function edadDesdePerfil(prof) {
-  if (!prof) return null;
-  if (prof.fechaNacimiento) {
-    const e = calcularEdad(prof.fechaNacimiento);
-    if (e !== null) return e;
-  }
-  return typeof prof.edad === 'number' ? prof.edad : null;
-}
-
-window.calcularEdad = calcularEdad;
-
-function setMaxFechaNacimiento() {
-  const hoy = new Date();
-  const max = new Date(hoy.getFullYear() - 18, hoy.getMonth(), hoy.getDate());
-  const iso = max.toISOString().slice(0, 10);
-  ['oficioFechaNacimiento', 'editFechaNacimiento'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.setAttribute('max', iso);
-  });
-}
-
-
-
-// ===== PRESUPUESTOS =====
-let quoteFotosData = [];
-
-function abrirModalPresupuesto(profId, profNombre) {
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'cliente') {
-    showToast('Debés iniciar sesión como cliente para solicitar presupuestos', 'error');
-    showSection('login');
-    return;
-  }
-
-  document.getElementById('quoteProfId').value = profId;
-  document.getElementById('quoteProfName').textContent = 'Profesional: ' + profNombre;
-  document.getElementById('quoteDescripcion').value = '';
-  document.getElementById('quoteTelefono').value = user.telefono || '';
-  document.getElementById('quoteUrgencia').value = 'Normal';
-  quoteFotosData = [];
-  document.getElementById('quotePhotosPreview').innerHTML = '';
-  const input = document.getElementById('quoteFotosInput');
-  if (input) input.value = '';
-
-  document.getElementById('quoteModal').classList.add('active');
-}
-
-function cerrarModalPresupuesto() {
-  document.getElementById('quoteModal').classList.remove('active');
-}
-
-function previewQuoteFotos(e) {
-  const files = Array.from(e.target.files || []);
-  const remaining = 4 - quoteFotosData.length;
-  if (remaining <= 0) {
-    showToast('Máximo 4 fotos', 'error');
-    return;
-  }
-
-  const toRead = files.slice(0, remaining);
-  toRead.forEach(file => {
-    if (!file.type.startsWith('image/')) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Alguna imagen supera 2MB', 'error');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      quoteFotosData.push(ev.target.result);
-      renderQuotePreview();
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function renderQuotePreview() {
-  const container = document.getElementById('quotePhotosPreview');
-  container.innerHTML = quoteFotosData.map((src, i) => `
-    <div style="position:relative;">
-      <img src="${src}" alt="Foto ${i + 1}">
-      <button type="button" onclick="quitarQuoteFoto(${i})" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border:none;border-radius:50%;background:#c1121f;color:white;cursor:pointer;font-size:0.7rem;">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-  `).join('');
-}
-
-function quitarQuoteFoto(index) {
-  quoteFotosData.splice(index, 1);
-  renderQuotePreview();
-}
-
-async function enviarPresupuesto(e) {
-  e.preventDefault();
-  const user = getCurrentUser();
-  if (!user || user.tipo !== 'cliente') return;
-
-  const profId = document.getElementById('quoteProfId').value;
-  const descripcion = document.getElementById('quoteDescripcion').value.trim();
-  const telefono = document.getElementById('quoteTelefono').value.trim();
-  const urgencia = document.getElementById('quoteUrgencia').value;
-
-  if (!descripcion) {
-    showToast('Completá la descripción del trabajo', 'error');
-    return;
-  }
-
-  try {
-    showToast('Enviando solicitud...');
-    const fotoUrls = [];
-    for (let i = 0; i < quoteFotosData.length; i++) {
-      try {
-        const url = await uploadImage(`quotes/${user.id}/${Date.now()}_${i}.jpg`, quoteFotosData[i]);
-        fotoUrls.push(url);
-      } catch (err) {
-        console.warn('Foto de presupuesto no subida:', err);
-      }
-    }
-
-    const quote = {
-      profId,
-      clienteId: user.id,
-      clienteNombre: user.nombre,
-      clienteEmail: user.email,
-      telefono,
-      descripcion,
-      urgencia,
-      fotos: fotoUrls,
-      fecha: new Date().toISOString(),
-      estado: 'pendiente'
-    };
-
-    await db.collection('quotes').add(quote);
-    // La notificación la crea la Cloud Function onQuoteCreated
-
-    cerrarModalPresupuesto();
-    showToast('¡Solicitud de presupuesto enviada! El profesional te contactará.');
-  } catch (err) {
-    console.error(err);
-    showToast('Error al enviar el presupuesto', 'error');
-  }
-}
-
-// ===== SOPORTE TÉCNICO (CHAT) =====
-function toggleSupportChat() {
-  const chat = document.getElementById('supportChat');
-  if (!chat) return;
-  chat.classList.toggle('open');
-  if (chat.classList.contains('open')) {
-    const input = document.getElementById('supportInput');
-    if (input) setTimeout(() => input.focus(), 100);
-  }
-}
-
-function appendSupportMsg(text, type) {
-  const box = document.getElementById('supportMessages');
-  if (!box) return;
-  const div = document.createElement('div');
-  div.className = 'support-msg ' + type;
-  div.innerHTML = `<p>${text}</p>`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-function respuestaSoporte(mensaje) {
-  const m = mensaje.toLowerCase();
-  if (m.includes('sesión') || m.includes('login') || m.includes('ingresar') || m.includes('contraseña')) {
-    return 'Para iniciar sesión usá el menú <strong>Iniciar Sesión</strong> con el email y contraseña con los que te registraste. Si olvidaste la clave, por ahora tenés que registrarte de nuevo (demo sin recuperación de contraseña).';
-  }
-  if (m.includes('presupuesto') || m.includes('cotiz')) {
-    return 'Para pedir un presupuesto: 1) Iniciá sesión como <strong>cliente</strong>. 2) Buscá un profesional. 3) Entrá a su perfil y tocá <strong>Solicitar presupuesto</strong>. Podés adjuntar fotos y describir el problema.';
-  }
-  if (m.includes('profesional') || m.includes('oficio') || m.includes('registrar')) {
-    return 'En <strong>Registrarse → Soy Persona de Oficio</strong> completá tus datos, DNI, oficio, zona y experiencia. Después podés subir fotos de trabajos en Mi Perfil.';
-  }
-  if (m.includes('reseña') || m.includes('valor')) {
-    return 'Las reseñas las dejan los clientes desde el perfil del profesional (calidad, tiempo y precio). El profesional recibe una notificación.';
-  }
-  if (m.includes('hola') || m.includes('buenas') || m.includes('buen día')) {
-    return '¡Hola! Contame en qué te ayudo: registro, presupuestos, reseñas o inicio de sesión.';
-  }
-  return 'Gracias por tu mensaje. Podés consultar sobre: registro, inicio de sesión, cómo pedir presupuesto o dejar reseñas. Si el problema continúa, escribí con más detalle y te orientamos.';
-}
-
-function supportQuickReply(text) {
-  appendSupportMsg(text, 'user');
-  setTimeout(() => {
-    appendSupportMsg(respuestaSoporte(text), 'bot');
-  }, 450);
-}
-
-function enviarMensajeSoporte(e) {
-  e.preventDefault();
-  const input = document.getElementById('supportInput');
-  const text = (input.value || '').trim();
-  if (!text) return;
-  appendSupportMsg(text, 'user');
-  input.value = '';
-  setTimeout(() => {
-    appendSupportMsg(respuestaSoporte(text), 'bot');
-  }, 500);
-}
-
-window.toggleSupportChat = toggleSupportChat;
-window.supportQuickReply = supportQuickReply;
-window.enviarMensajeSoporte = enviarMensajeSoporte;
-window.abrirModalPresupuesto = abrirModalPresupuesto;
-window.cerrarModalPresupuesto = cerrarModalPresupuesto;
-window.previewQuoteFotos = previewQuoteFotos;
-window.quitarQuoteFoto = quitarQuoteFoto;
-window.enviarPresupuesto = enviarPresupuesto;
-
-// ===== START =====
-
-// ===== PWA: INSTALAR APP =====
-let deferredInstallPrompt = null;
-
-function mostrarBotonesInstalar(show) {
-  const nav = document.getElementById('navInstall');
-  const hero = document.getElementById('btnInstallHero');
-  const displayNav = show ? 'block' : 'none';
-  const displayHero = show ? 'inline-flex' : 'none';
-  if (nav) nav.style.display = displayNav;
-  if (hero) hero.style.display = displayHero;
-}
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  mostrarBotonesInstalar(true);
-  console.log('PWA: prompt de instalación disponible');
-});
-
-window.addEventListener('appinstalled', () => {
-  deferredInstallPrompt = null;
-  mostrarBotonesInstalar(false);
-  showToast('¡App instalada correctamente!');
-});
-
-async function instalarApp() {
-  // Ya instalada / modo standalone
-  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-    showToast('La app ya está instalada');
-    mostrarBotonesInstalar(false);
-    return;
-  }
-
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    console.log('PWA install:', outcome);
-    if (outcome === 'accepted') {
-      showToast('Instalando Oficios YA!...');
-    }
-    deferredInstallPrompt = null;
-    mostrarBotonesInstalar(false);
-    return;
-  }
-
-  // iOS / navegadores sin beforeinstallprompt
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (isIOS) {
-    showToast('En iPhone: Compartir → “Agregar a pantalla de inicio”');
-    return;
-  }
-  showToast('Usá el menú del navegador: “Instalar aplicación” o “Agregar a la pantalla de inicio”');
-}
-
-window.instalarApp = instalarApp;
-
-
-document.addEventListener('DOMContentLoaded', init);
+/* ===== VARIABLES & RESET ===== */
+:root {
+  --primary: #e85d04;
+  --primary-dark: #dc2f02;
+  --primary-light: #f48c06;
+  --secondary: #370617;
+  --accent: #faa307;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #212529;
+  --text-light: #6c757d;
+  --border: #dee2e6;
+  --success: #2d6a4f;
+  --shadow: 0 4px 20px rgba(0,0,0,0.08);
+  --shadow-hover: 0 8px 30px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --transition: all 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ===== NAVBAR ===== */
+.navbar {
+  background: var(--secondary);
+  color: white;
+  padding: 0.9rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 15px rgba(0,0,0,0.2);
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo span {
+  color: var(--primary-light);
+}
+
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.nav-links a {
+  color: rgba(255,255,255,0.9);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: var(--transition);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+
+.nav-links a:hover {
+  color: var(--accent);
+  background: rgba(255,255,255,0.08);
+}
+
+.notif-btn {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* User menu dropdown */
+.user-menu {
+  position: relative;
+  list-style: none;
+}
+
+.user-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 0.35rem 0.7rem 0.35rem 0.4rem;
+  border-radius: 24px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.user-menu-btn:hover,
+.user-menu.open .user-menu-btn {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.35);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-avatar-lg {
+  width: 42px;
+  height: 42px;
+  font-size: 0.9rem;
+}
+
+.user-menu-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-caret {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  transition: transform 0.2s ease;
+}
+
+.user-menu.open .user-menu-caret {
+  transform: rotate(180deg);
+}
+
+.user-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 240px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+  z-index: 1100;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.user-menu.open .user-dropdown {
+  display: block;
+  animation: fadeIn 0.2s ease;
+}
+
+.user-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #fff8f0;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-dropdown-header strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--secondary);
+}
+
+.user-dropdown-header small {
+  color: var(--text-light);
+  font-size: 0.8rem;
+}
+
+.user-dropdown-item {
+  display: flex !important;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem !important;
+  color: var(--text) !important;
+  font-size: 0.9rem !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.user-dropdown-item:hover {
+  background: #f5f5f5 !important;
+  color: var(--primary) !important;
+}
+
+.user-dropdown-item i {
+  width: 18px;
+  color: var(--primary);
+}
+
+.user-dropdown-logout {
+  color: #c1121f !important;
+}
+
+.user-dropdown-logout i {
+  color: #c1121f !important;
+}
+
+.user-dropdown-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.25rem 0;
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+/* ===== SECTIONS ===== */
+.section {
+  display: none;
+  padding: 2.5rem 0 4rem;
+  min-height: calc(100vh - 180px);
+}
+
+.section.active {
+  display: block;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-title {
+  text-align: center;
+  font-size: 1.9rem;
+  margin-bottom: 2rem;
+  color: var(--secondary);
+  font-weight: 600;
+}
+
+/* ===== HERO ===== */
+.hero {
+  background: linear-gradient(135deg, var(--secondary) 0%, #6a040f 50%, var(--primary-dark) 100%);
+  color: white;
+  padding: 5rem 1.5rem;
+  text-align: center;
+  margin-bottom: 3rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1600&h=600&fit=crop') center/cover;
+  opacity: 0.15;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.hero-logo {
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  margin: 0 auto 1.5rem;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  animation: floatUpDown 2.5s ease-in-out infinite;
+  display: block;
+}
+
+@keyframes floatUpDown {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-18px);
+  }
+}
+
+.hero h1 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  line-height: 1.25;
+}
+
+.hero h1 span {
+  color: var(--accent);
+}
+
+.hero p {
+  font-size: 1.15rem;
+  opacity: 0.95;
+  margin-bottom: 2rem;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ===== BUTTONS ===== */
+.btn {
+  padding: 0.75rem 1.6rem;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(232, 93, 4, 0.4);
+}
+
+.btn-outline {
+  background: transparent;
+  color: white;
+  border: 2px solid white;
+}
+
+.btn-outline:hover {
+  background: white;
+  color: var(--secondary);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #4a0a1f;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-sm {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+}
+
+/* ===== WELCOME CARD ===== */
+.welcome-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  box-shadow: var(--shadow);
+  margin-bottom: 3rem;
+  border-left: 5px solid var(--primary);
+}
+
+.welcome-text h2 {
+  color: var(--secondary);
+  margin-bottom: 1rem;
+  font-size: 1.6rem;
+}
+
+.welcome-text h2 i {
+  color: var(--primary);
+  margin-right: 8px;
+}
+
+.welcome-text p {
+  color: var(--text-light);
+  margin-bottom: 1.5rem;
+  font-size: 1.05rem;
+}
+
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.benefit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff5eb;
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.benefit i {
+  color: var(--primary);
+  font-size: 1.2rem;
+}
+
+/* ===== OFICIOS GRID ===== */
+.oficios-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3.5rem;
+}
+
+.oficio-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.oficio-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-hover);
+}
+
+.oficio-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.oficio-info {
+  padding: 1.2rem;
+}
+
+.oficio-info h3 {
+  font-size: 1.15rem;
+  margin-bottom: 0.3rem;
+  color: var(--secondary);
+}
+
+.oficio-info h3 i {
+  color: var(--primary);
+  margin-right: 6px;
+}
+
+.oficio-info p {
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+/* ===== STEPS ===== */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.step {
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.step-number {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 auto 1rem;
+}
+
+.step h3 {
+  margin-bottom: 0.5rem;
+  color: var(--secondary);
+}
+
+.step p {
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+
+/* ===== SEARCH ===== */
+.search-box {
+  background: var(--card-bg);
+  padding: 1.8rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 2.5rem;
+}
+
+.search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.filter-group {
+  flex: 1;
+  min-width: 180px;
+}
+
+.filter-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: var(--text-light);
+}
+
+.filter-group label i {
+  color: var(--primary);
+  margin-right: 4px;
+}
+
+.filter-group input,
+.filter-group select,
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: var(--transition);
+  background: white;
+}
+
+.filter-group input:focus,
+.filter-group select:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.15);
+}
+
+.resultados-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.prof-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+}
+
+.prof-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+}
+
+.prof-header {
+  background: linear-gradient(135deg, var(--secondary), #6a040f);
+  color: white;
+  padding: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.prof-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.prof-header-info h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.2rem;
+}
+
+.prof-header-info .oficio-tag {
+  background: rgba(255,255,255,0.2);
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.prof-body {
+  padding: 1.2rem;
+  flex: 1;
+}
+
+.prof-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.prof-meta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.prof-meta i {
+  color: var(--primary);
+}
+
+.prof-rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0.8rem;
+}
+
+.stars {
+  color: var(--accent);
+}
+
+.prof-actions {
+  padding: 0 1.2rem 1.2rem;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.no-results {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-light);
+}
+
+.no-results i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+/* ===== REGISTER ===== */
+.register-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  justify-content: center;
+}
+
+.tab-btn {
+  padding: 0.8rem 1.8rem;
+  border: 2px solid var(--border);
+  background: white;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  color: var(--text-light);
+}
+
+.tab-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.tab-btn:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.register-form {
+  display: none;
+  background: var(--card-bg);
+  padding: 2rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.register-form.active {
+  display: block;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+}
+
+/* ===== LOGIN ===== */
+.login-card {
+  background: var(--card-bg);
+  padding: 2.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-width: 420px;
+  margin: 2rem auto;
+}
+
+.login-card h2 {
+  text-align: center;
+  margin-bottom: 1.8rem;
+  color: var(--secondary);
+}
+
+.login-card h2 i {
+  color: var(--primary);
+  margin-right: 8px;
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+
+.login-footer a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ===== PROFILE ===== */
+.profile-header {
+  background: linear-gradient(135deg, var(--secondary), #6a040f);
+  color: white;
+  padding: 2.5rem;
+  border-radius: var(--radius);
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.profile-avatar-lg {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  border: 4px solid rgba(255,255,255,0.3);
+}
+
+.profile-info h2 {
+  font-size: 1.8rem;
+  margin-bottom: 0.3rem;
+}
+
+.profile-info .oficio-badge {
+  display: inline-block;
+  background: var(--primary);
+  padding: 0.3rem 0.9rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  margin-bottom: 0.8rem;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+
+.profile-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.profile-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.detail-card {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.detail-card h3 {
+  color: var(--secondary);
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-card h3 i {
+  color: var(--primary);
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-item span:first-child {
+  color: var(--text-light);
+}
+
+/* Photos gallery */
+.photos-section {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.photos-section h3 {
+  color: var(--secondary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photos-section h3 i {
+  color: var(--primary);
+}
+
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.photo-item {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-upload {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  color: var(--text-light);
+}
+
+.photo-upload:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #fff5eb;
+}
+
+.photo-upload i {
+  font-size: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.photo-upload input {
+  display: none;
+}
+
+/* Reviews */
+.reviews-section {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.reviews-section h3 {
+  color: var(--secondary);
+  margin-bottom: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reviews-section h3 i {
+  color: var(--primary);
+}
+
+.review-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.review-author {
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.review-ratings {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.review-ratings span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.review-ratings .stars {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.review-text {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.avg-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.avg-rating .score {
+  font-weight: 700;
+  color: var(--secondary);
+  font-size: 1.4rem;
+}
+
+/* ===== NOTIFICATIONS ===== */
+.notifications-list {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.notif-item {
+  background: var(--card-bg);
+  padding: 1.2rem 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  border-left: 4px solid var(--primary);
+  transition: var(--transition);
+}
+
+.notif-item.unread {
+  background: #fff8f0;
+}
+
+.notif-icon {
+  width: 42px;
+  height: 42px;
+  background: #fff5eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.notif-content {
+  flex: 1;
+}
+
+.notif-content p {
+  margin-bottom: 0.3rem;
+}
+
+.notif-time {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.empty-notifs {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-light);
+}
+
+.empty-notifs i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+/* ===== MODAL ===== */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: var(--radius);
+  max-width: 480px;
+  width: 100%;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.close-modal {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-light);
+}
+
+.close-modal:hover {
+  color: var(--primary);
+}
+
+.modal-content h3 {
+  margin-bottom: 1.5rem;
+  color: var(--secondary);
+}
+
+.rating-input {
+  display: flex;
+  gap: 0.4rem;
+  font-size: 1.5rem;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.rating-input i {
+  transition: var(--transition);
+}
+
+.rating-input i:hover,
+.rating-input i.active {
+  color: var(--accent);
+}
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--secondary);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  z-index: 3000;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.35s ease;
+  max-width: 350px;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.success {
+  background: var(--success);
+}
+
+.toast.error {
+  background: #c1121f;
+}
+
+.modal-lg {
+  max-width: 560px;
+}
+
+.modal-subtitle {
+  color: var(--text-light);
+  margin: -0.8rem 0 1.2rem;
+  font-size: 0.95rem;
+}
+
+.quote-photos-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.quote-photos-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.quote-upload-btn {
+  max-width: 140px;
+  aspect-ratio: auto;
+  min-height: 70px;
+  padding: 0.8rem;
+}
+
+/* ===== SOPORTE FLOTANTE ===== */
+.support-bubble {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 2500;
+  box-shadow: 0 6px 24px rgba(232, 93, 4, 0.45);
+  transition: var(--transition);
+}
+
+.support-bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 8px 28px rgba(232, 93, 4, 0.55);
+}
+
+.support-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--primary-light);
+  animation: supportPulse 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes supportPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+.support-chat {
+  position: fixed;
+  bottom: 5.5rem;
+  right: 1.5rem;
+  width: 360px;
+  max-width: calc(100vw - 2rem);
+  height: 480px;
+  max-height: calc(100vh - 7rem);
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  z-index: 2500;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.support-chat.open {
+  display: flex;
+  animation: fadeIn 0.25s ease;
+}
+
+.support-chat-header {
+  background: linear-gradient(135deg, var(--secondary), #6a040f);
+  color: white;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.support-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.support-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.support-status {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.support-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.support-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background: #f7f7f8;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.support-msg {
+  max-width: 85%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.support-msg.bot {
+  background: white;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.support-msg.user {
+  background: var(--primary);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.support-msg p + p {
+  margin-top: 0.4rem;
+}
+
+.support-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.support-quick button {
+  border: 1px solid var(--primary);
+  background: white;
+  color: var(--primary);
+  border-radius: 20px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.support-quick button:hover {
+  background: #fff5eb;
+}
+
+.support-chat-input {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.7rem;
+  border-top: 1px solid var(--border);
+  background: white;
+}
+
+.support-chat-input input {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 0.55rem 0.9rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.support-chat-input input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.support-chat-input button {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.support-chat-input button:hover {
+  background: var(--primary-dark);
+}
+
+@media (max-width: 480px) {
+  .support-bubble {
+    bottom: 1rem;
+    right: 1rem;
+    width: 54px;
+    height: 54px;
+  }
+  .support-chat {
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    bottom: 5rem;
+  }
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  background: var(--secondary);
+  color: rgba(255,255,255,0.85);
+  padding: 3rem 0 1.5rem;
+  margin-top: auto;
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.footer-brand h3 {
+  color: white;
+  margin-bottom: 0.6rem;
+}
+
+.footer-brand h3 i {
+  color: var(--primary-light);
+}
+
+.footer-links h4,
+.footer-contact h4 {
+  color: white;
+  margin-bottom: 0.8rem;
+  font-size: 1rem;
+}
+
+.footer-links a {
+  display: block;
+  margin-bottom: 0.4rem;
+  transition: var(--transition);
+}
+
+.footer-links a:hover {
+  color: var(--accent);
+}
+
+.footer-contact p {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.footer-contact i {
+  color: var(--primary-light);
+  margin-right: 6px;
+}
+
+.footer-bottom {
+  border-top: 1px solid rgba(255,255,255,0.15);
+  padding-top: 1.2rem;
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .menu-toggle {
+    display: block;
+  }
+
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--secondary);
+    flex-direction: column;
+    padding: 1rem;
+    gap: 0.5rem;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
+  .user-menu {
+    width: 100%;
+  }
+
+  .user-menu-btn {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .user-dropdown {
+    position: static;
+    width: 100%;
+    margin-top: 0.5rem;
+    box-shadow: none;
+  }
+
+  .user-menu-name {
+    max-width: none;
+  }
+
+  .hero h1 {
+    font-size: 1.9rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-details {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .search-filters {
+    flex-direction: column;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .profile-stats {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 3.5rem 1rem;
+  }
+
+  .hero-logo {
+    width: 120px;
+    height: 120px;
+    border-radius: 18px;
+  }
+
+  .hero h1 {
+    font-size: 1.6rem;
+  }
+
+  .welcome-card {
+    padding: 1.5rem;
+  }
+
+  .oficios-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== REGISTRO FOTO PERFIL ===== */
+.reg-photo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.reg-photo-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  border: 3px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--text-light);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.reg-photo-preview i {
+  font-size: 2rem;
+  margin-bottom: 0.2rem;
+}
+
+.reg-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ===== PERFIL PROFESIONAL MEJORADO ===== */
+.prof-profile {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.prof-hero {
+  background: linear-gradient(135deg, var(--secondary) 0%, #6a040f 55%, var(--primary-dark) 100%);
+  border-radius: 20px;
+  padding: 2rem 2rem 2.2rem;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 12px 40px rgba(55, 6, 23, 0.25);
+}
+
+.prof-hero::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+
+.prof-hero-top {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+.prof-photo {
+  display: block;
+  width: 120px !important;
+  height: 120px !important;
+  max-width: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid rgba(255,255,255,0.35);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  background: var(--primary);
+  flex-shrink: 0;
+}
+
+.prof-photo-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,255,255,0.35);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: white;
+}
+
+.my-photo-edit {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.my-photo-edit .prof-photo,
+.my-photo-edit .prof-photo-placeholder {
+  width: 120px !important;
+  height: 120px !important;
+}
+
+.prof-avatar {
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+}
+
+.prof-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+.remember-row {
+  margin-top: -0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.remember-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.remember-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.prof-hero-info h1 {
+  font-size: 1.85rem;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+.prof-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.prof-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.15);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  backdrop-filter: blur(4px);
+}
+
+.prof-chip.accent {
+  background: var(--primary);
+  font-weight: 600;
+}
+
+.prof-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.4rem;
+  font-size: 0.92rem;
+  opacity: 0.95;
+}
+
+.prof-hero-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prof-score-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.4rem;
+  position: relative;
+  z-index: 1;
+}
+
+.prof-score-item {
+  background: rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
+  min-width: 110px;
+  text-align: center;
+}
+
+.prof-score-item .val {
+  font-size: 1.35rem;
+  font-weight: 700;
+  display: block;
+}
+
+.prof-score-item .lbl {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.prof-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .prof-grid {
+    grid-template-columns: 1fr;
+  }
+  .prof-hero-top {
+    flex-direction: column;
+    text-align: center;
+  }
+  .prof-hero-meta {
+    justify-content: center;
+  }
+  .prof-badge-row {
+    justify-content: center;
+  }
+  .prof-score-bar {
+    justify-content: center;
+  }
+}
+
+.prof-card-block {
+  background: white;
+  border-radius: 16px;
+  padding: 1.4rem 1.5rem;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.prof-card-block h3 {
+  font-size: 1.05rem;
+  color: var(--secondary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prof-card-block h3 i {
+  color: var(--primary);
+}
+
+.prof-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.prof-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.95rem;
+}
+
+.prof-info-row:last-child {
+  border-bottom: none;
+}
+
+.prof-info-row .k {
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prof-info-row .v {
+  font-weight: 600;
+  color: var(--secondary);
+  text-align: right;
+}
+
+.prof-about {
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 0.98rem;
+}
+
+.prof-rating-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.prof-rating-bar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 36px;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+}
+
+.prof-rating-bar-track {
+  height: 8px;
+  background: #eee;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.prof-rating-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  border-radius: 4px;
+}
+
+.prof-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.85rem;
+}
+
+.prof-gallery-item {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  position: relative;
+}
+
+.prof-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.prof-gallery-item:hover img {
+  transform: scale(1.05);
+}
+
+.prof-gallery-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+  background: #fafafa;
+  border-radius: 12px;
+  border: 2px dashed var(--border);
+}
+
+.prof-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+.review-card {
+  background: #fafafa;
+  border: 1px solid #eee !important;
+  border-radius: 12px !important;
+  padding: 1.15rem !important;
+}
+
+/* Search card with photo */
+.prof-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* ===== CLIENTE PERFIL ===== */
+.client-profile-shell {
+  max-width: 640px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-hover);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.client-profile-banner {
+  background: linear-gradient(135deg, var(--secondary), #6a040f);
+  color: white;
+  padding: 1.8rem 1.6rem;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.client-profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.3rem;
+  border: 3px solid rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+
+.client-profile-banner h2 {
+  font-size: 1.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.client-profile-role {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.client-profile-body {
+  padding: 1.6rem;
+}
+
+.client-section-title {
+  font-size: 1.05rem;
+  color: var(--secondary);
+  margin-bottom: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.client-section-title i {
+  color: var(--primary);
+}
+
+/* Own profile photo edit */
+.my-photo-edit {
+  position: relative;
+  display: inline-block;
+}
+
+.my-photo-edit .change-photo-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  border: 2px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.my-photo-edit input {
+  display: none;
+}
+
+/* ===== VERIFICACIÓN DE EMAIL ===== */
+.verify-card {
+  max-width: 520px;
+  margin: 2rem auto;
+  background: white;
+  border-radius: 20px;
+  padding: 2.2rem 1.8rem;
+  box-shadow: var(--shadow-hover);
+  text-align: center;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.verify-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1.2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fff5eb, #ffe8d6);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+}
+
+.verify-card h2 {
+  color: var(--secondary);
+  font-size: 1.45rem;
+  margin-bottom: 0.8rem;
+}
+
+.verify-lead {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.verify-card p {
+  color: var(--text-light);
+  line-height: 1.55;
+  margin-bottom: 0.7rem;
+  font-size: 0.95rem;
+}
+
+.verify-spam {
+  font-size: 0.88rem !important;
+  color: #888 !important;
+}
+
+.verify-wait {
+  margin: 1.4rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.verify-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 0.75rem;
+  border: 3px solid #eee;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: verifySpin 0.9s linear infinite;
+}
+
+@keyframes verifySpin {
+  to { transform: rotate(360deg); }
+}
+
+.verify-email-line {
+  margin-top: 0.5rem !important;
+  color: var(--text) !important;
+}
+
+.verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  justify-content: center;
+  margin-top: 1.2rem;
+}
+
+
+/* ===== BOTÓN INSTALAR PWA ===== */
+.btn-install {
+  background: white;
+  color: var(--primary);
+  border: 2px solid white;
+  font-weight: 600;
+  padding: 0.75rem 1.4rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--transition);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+
+.btn-install:hover {
+  background: #fff5eb;
+  transform: translateY(-2px);
+}
+
+.btn-install-nav {
+  background: var(--primary);
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 0.4rem 0.9rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: var(--transition);
+}
+
+.btn-install-nav:hover {
+  background: var(--primary-dark);
+  filter: brightness(1.05);
+}
+
+/* ===== HOME MEJORADO + MÓVIL ===== */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #370617 0%, #6a040f 40%, #9d0208 70%, #e85d04 100%);
+  padding: 2.5rem 1.25rem 2.8rem;
+  border-radius: 0 0 28px 28px;
+}
+
+.hero-shapes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.35;
+  animation: blobFloat 8s ease-in-out infinite;
+}
+
+.blob-1 {
+  width: 180px;
+  height: 180px;
+  background: #ffba08;
+  top: -40px;
+  right: -30px;
+}
+
+.blob-2 {
+  width: 140px;
+  height: 140px;
+  background: #faa307;
+  bottom: 20px;
+  left: -40px;
+  animation-delay: -3s;
+}
+
+.blob-3 {
+  width: 100px;
+  height: 100px;
+  background: #ffdd57;
+  top: 40%;
+  right: 20%;
+  animation-delay: -5s;
+  opacity: 0.25;
+}
+
+@keyframes blobFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12px, -16px) scale(1.08); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
+  margin-bottom: 0.9rem;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.hero-subtitle {
+  color: rgba(255,255,255,0.9) !important;
+  font-size: 1rem !important;
+  max-width: 420px;
+  margin: 0 auto 1.2rem !important;
+}
+
+.hero-search-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  color: var(--text-light);
+  padding: 0.85rem 1.1rem;
+  border-radius: 16px;
+  margin: 0 auto 1.25rem;
+  max-width: 400px;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.2);
+  transition: var(--transition);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.hero-search-chip:hover,
+.hero-search-chip:active {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+}
+
+.hero-search-chip .fa-search {
+  color: var(--primary);
+}
+
+.hero-search-chip .fa-arrow-right {
+  margin-left: auto;
+  color: var(--primary);
+}
+
+.hero-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  margin-bottom: 1.4rem;
+}
+
+.hero-buttons .btn {
+  min-height: 48px;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 14px;
+  padding: 0.65rem 1rem;
+  min-width: 90px;
+  color: white;
+}
+
+.hero-stat strong {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.hero-stat span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.home-body {
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+.quick-actions {
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.quick-action {
+  border: none;
+  background: white;
+  border-radius: 16px;
+  padding: 0.85rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--secondary);
+  transition: var(--transition);
+}
+
+.quick-action:active {
+  transform: scale(0.96);
+}
+
+.qa-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: white;
+}
+
+.qa-search { background: linear-gradient(135deg, #e85d04, #f48c06); }
+.qa-reg { background: linear-gradient(135deg, #9d0208, #dc2f02); }
+.qa-login { background: linear-gradient(135deg, #370617, #6a040f); }
+.qa-tool { background: linear-gradient(135deg, #faa307, #ffba08); color: #370617 !important; }
+
+.welcome-card {
+  border-radius: 20px;
+  border: none;
+  box-shadow: 0 8px 30px rgba(55, 6, 23, 0.08);
+  background: linear-gradient(180deg, #fff 0%, #fffaf5 100%);
+  overflow: hidden;
+}
+
+.benefits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.benefit {
+  background: white;
+  border-radius: 12px;
+  padding: 0.75rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  border: 1px solid #f0e6dc;
+  font-size: 0.85rem;
+}
+
+.oficios-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.9rem;
+}
+
+.oficio-card {
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border: none;
+}
+
+.oficio-card:active {
+  transform: scale(0.98);
+}
+
+.oficio-card img {
+  height: 110px;
+  object-fit: cover;
+}
+
+.oficio-info {
+  padding: 0.85rem 0.9rem 1rem;
+}
+
+.oficio-info h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.oficio-info p {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  line-height: 1.35;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.9rem;
+}
+
+.step {
+  background: white;
+  border-radius: 18px;
+  padding: 1.25rem 1rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+  text-align: center;
+  border: 1px solid #f5ebe0;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 0.75rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* Navbar móvil más cómoda */
+@media (max-width: 768px) {
+  .quick-actions {
+    display: grid;
+  }
+
+  .navbar {
+    padding: 0.55rem 0;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+  }
+
+  .nav-links {
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 0 0 16px 16px;
+    padding: 0.75rem;
+  }
+
+  .nav-links a {
+    display: block;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    font-size: 1rem;
+  }
+
+  .menu-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.1);
+  }
+
+  .hero {
+    padding: 1.75rem 1rem 2.2rem;
+    border-radius: 0 0 24px 24px;
+  }
+
+  .hero h1 {
+    font-size: 1.55rem !important;
+    line-height: 1.25;
+  }
+
+  .hero-logo {
+    width: 110px !important;
+    height: 110px !important;
+    max-width: 110px !important;
+    margin-bottom: 1rem !important;
+    border-radius: 20px !important;
+  }
+
+  .hero-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-buttons .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hero-stats {
+    gap: 0.5rem;
+  }
+
+  .hero-stat {
+    flex: 1;
+    min-width: 0;
+    padding: 0.55rem 0.4rem;
+  }
+
+  .section {
+    padding: 1.25rem 0 3rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+    margin: 1.5rem 0 1rem;
+  }
+
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .welcome-card {
+    padding: 1.25rem;
+  }
+
+  .welcome-text h2 {
+    font-size: 1.15rem;
+  }
+
+  .welcome-text p {
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+
+  .oficios-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .oficio-card img {
+    height: 95px;
+  }
+
+  .search-filters {
+    border-radius: 16px;
+    padding: 1rem;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    min-height: 48px;
+    font-size: 16px; /* evita zoom en iOS */
+    border-radius: 12px;
+  }
+
+  .btn {
+    min-height: 48px;
+    border-radius: 12px;
+  }
+
+  .prof-card {
+    border-radius: 16px;
+  }
+
+  .support-bubble {
+    bottom: 1.1rem;
+    right: 1.1rem;
+  }
+
+  .footer {
+    padding: 2rem 0 5rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .quick-actions {
+    gap: 0.4rem;
+  }
+  .quick-action {
+    font-size: 0.65rem;
+    padding: 0.7rem 0.25rem;
+  }
+  .qa-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 0.95rem;
+  }
+  .oficios-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero h1 {
+    font-size: 1.4rem !important;
+  }
+}
+
+/* Animación suave al aparecer secciones */
+.section.active {
+  animation: homeFade 0.35s ease;
+}
+
+@keyframes homeFade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== BARRA INFERIOR MÓVIL ===== */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%) translateY(110%);
+  width: min(420px, 100%);
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -6px 28px rgba(55, 6, 23, 0.14);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  z-index: 2200;
+  padding: 0.35rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  transition: transform 0.28s ease, opacity 0.28s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bottom-nav.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-nav-item {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.55rem 0.4rem;
+  border-radius: 14px;
+  color: #8a7a72;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+  min-height: 52px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav-item i {
+  font-size: 1.2rem;
+}
+
+.bottom-nav-item:active {
+  transform: scale(0.96);
+}
+
+.bottom-nav-item.active {
+  color: var(--primary);
+  background: linear-gradient(180deg, #fff5eb 0%, #ffe8d6 100%);
+}
+
+.bottom-nav-item.active i {
+  color: var(--primary);
+}
+
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: grid;
+  }
+
+  /* Espacio para que el contenido no quede detrás de la barra */
+  body {
+    padding-bottom: 72px;
+  }
+
+  .support-bubble {
+    bottom: 5.2rem !important;
+  }
+
+  .support-chat {
+    bottom: 9rem !important;
+  }
+
+  .footer {
+    padding-bottom: 5.5rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .bottom-nav {
+    display: none !important;
+  }
+}
