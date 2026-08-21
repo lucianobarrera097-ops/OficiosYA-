@@ -1,3 +1,4 @@
+
 // ===== DATA & STORAGE (Firebase) =====
 // currentUser se mantiene en memoria + sessionStorage para la UI
 let currentUserCache = null;
@@ -2570,19 +2571,20 @@ window.instalarApp = instalarApp;
 
 
 
-// ===== BARRA INFERIOR MÓVIL (siempre visible en cualquier sección) =====
+// ===== BARRA INFERIOR MÓVIL =====
 function isMobileNav() {
   return window.matchMedia('(max-width: 768px)').matches;
 }
 
+/** Muestra la cápsula en móvil. Si se ocultó, vuelve al tocar. */
 function mostrarBarraInferior() {
   const bar = document.getElementById('bottomNav');
   if (!bar) return;
-  if (isMobileNav()) {
-    bar.classList.add('visible');
-  } else {
+  if (!isMobileNav()) {
     bar.classList.remove('visible');
+    return;
   }
+  bar.classList.add('visible');
 }
 
 function actualizarBarraInferior(sectionId) {
@@ -2592,11 +2594,10 @@ function actualizarBarraInferior(sectionId) {
   if (sectionId === 'search') active = 'search';
   else if (['profile', 'myProfile', 'editAccount', 'notifications', 'login', 'register', 'verifyEmail'].includes(sectionId)) active = 'profile';
   else if (sectionId === 'home' || !sectionId) active = 'home';
-  else active = ''; // otras secciones (ej. detalle público): sin resaltar fuerte
+  else active = '';
   bar.querySelectorAll('.bottom-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-nav') === active);
   });
-  // Mantener la barra visible al cambiar de sección
   mostrarBarraInferior();
 }
 
@@ -2628,10 +2629,21 @@ window.navBottom = navBottom;
 window.mostrarBarraInferior = mostrarBarraInferior;
 
 function setupBottomNavInteraction() {
-  // Visible desde el inicio en móvil y al rotar la pantalla
   mostrarBarraInferior();
+
+  // Al tocar o scrollear, la barra vuelve a aparecer si se había ocultado
+  const show = () => {
+    if (isMobileNav()) mostrarBarraInferior();
+  };
+  document.addEventListener('touchstart', show, { passive: true });
+  document.addEventListener('touchend', show, { passive: true });
+  document.addEventListener('click', show);
+  window.addEventListener('scroll', show, { passive: true });
   window.addEventListener('resize', mostrarBarraInferior);
-  window.addEventListener('orientationchange', mostrarBarraInferior);
+  window.addEventListener('orientationchange', () => setTimeout(mostrarBarraInferior, 100));
+
+  setTimeout(mostrarBarraInferior, 300);
+  setTimeout(mostrarBarraInferior, 1000);
 }
 
 
