@@ -2779,11 +2779,14 @@ img {
 
 @media (max-width: 768px) {
   .bottom-nav {
-    display: grid;
-    /* Visible por defecto en todas las secciones */
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-    pointer-events: auto;
+    display: grid !important;
+  }
+
+  /* Visible por defecto y al tocar (clase .visible) */
+  .bottom-nav.visible {
+    transform: translateX(-50%) translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
   }
 
   body {
