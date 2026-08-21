@@ -2570,26 +2570,19 @@ window.instalarApp = instalarApp;
 
 
 
-// ===== BARRA INFERIOR MÓVIL =====
-let bottomNavHideTimer = null;
-
+// ===== BARRA INFERIOR MÓVIL (siempre visible en cualquier sección) =====
 function isMobileNav() {
   return window.matchMedia('(max-width: 768px)').matches;
 }
 
 function mostrarBarraInferior() {
-  if (!isMobileNav()) return;
   const bar = document.getElementById('bottomNav');
   if (!bar) return;
-  bar.classList.add('visible');
-  if (bottomNavHideTimer) clearTimeout(bottomNavHideTimer);
-  // Se mantiene visible un rato; al tocar de nuevo se reinicia el temporizador
-  bottomNavHideTimer = setTimeout(() => {
-    // No ocultar si el teclado o formularios están en foco
-    const ae = document.activeElement;
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  if (isMobileNav()) {
+    bar.classList.add('visible');
+  } else {
     bar.classList.remove('visible');
-  }, 8000);
+  }
 }
 
 function actualizarBarraInferior(sectionId) {
@@ -2597,12 +2590,14 @@ function actualizarBarraInferior(sectionId) {
   if (!bar) return;
   let active = 'home';
   if (sectionId === 'search') active = 'search';
-  else if (['profile', 'myProfile', 'editAccount', 'notifications', 'login', 'register'].includes(sectionId)) active = 'profile';
+  else if (['profile', 'myProfile', 'editAccount', 'notifications', 'login', 'register', 'verifyEmail'].includes(sectionId)) active = 'profile';
   else if (sectionId === 'home' || !sectionId) active = 'home';
-  else active = ''; // otras secciones: sin resaltar
+  else active = ''; // otras secciones (ej. detalle público): sin resaltar fuerte
   bar.querySelectorAll('.bottom-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-nav') === active);
   });
+  // Mantener la barra visible al cambiar de sección
+  mostrarBarraInferior();
 }
 
 function navBottom(destino) {
@@ -2632,12 +2627,11 @@ function navBottom(destino) {
 window.navBottom = navBottom;
 window.mostrarBarraInferior = mostrarBarraInferior;
 
-// Mostrar barra al tocar / hacer scroll en móvil
 function setupBottomNavInteraction() {
-  const show = () => mostrarBarraInferior();
-  document.addEventListener('touchstart', show, { passive: true });
-  document.addEventListener('click', show);
-  window.addEventListener('scroll', show, { passive: true });
+  // Visible desde el inicio en móvil y al rotar la pantalla
+  mostrarBarraInferior();
+  window.addEventListener('resize', mostrarBarraInferior);
+  window.addEventListener('orientationchange', mostrarBarraInferior);
 }
 
 
