@@ -1,5 +1,5 @@
 /* Service Worker — Oficios YA! PWA */
-const CACHE_NAME = 'oficiosya-v3';
+const CACHE_NAME = 'oficiosya-v5';
 const PRECACHE = [
   './',
   './index.html',
@@ -9,7 +9,13 @@ const PRECACHE = [
   './manifest.webmanifest',
   './logo.jpg',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './oficio-plomeria.jpg',
+  './oficio-gasista.jpg',
+  './oficio-electricista.jpg',
+  './oficio-pintor.jpg',
+  './oficio-albanil.jpg',
+  './oficio-carpintero.jpg'
 ];
 
 self.addEventListener('install', (event) => {
