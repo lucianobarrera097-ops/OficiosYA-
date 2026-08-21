@@ -410,7 +410,14 @@ async function init() {
   setupRatingStars();
   setMaxFechaNacimiento();
   cargarCredencialesRecordadas();
-  showSection('home');
+
+  // Historial inicial: inicio (o la sección del hash si existe)
+  const initialSection = (location.hash || '#home').replace('#', '') || 'home';
+  const validInitial = document.getElementById(initialSection) ? initialSection : 'home';
+  try {
+    history.replaceState({ section: validInitial }, '', '#' + validInitial);
+  } catch (err) { /* ignore */ }
+  showSection(validInitial, true);
 
   if (typeof firebaseReady === 'undefined' || !firebaseReady) {
     console.warn('Firebase no configurado — la app no persistirá datos en la nube.');
@@ -688,12 +695,40 @@ function closeMobileNav() {
   closeUserMenu();
 }
 
-function showSection(sectionId) {
+/**
+ * Navegación SPA con historial del navegador.
+ * fromHistory=true cuando viene del botón Atrás/Adelante (no vuelve a pushear).
+ */
+function showSection(sectionId, fromHistory) {
+  if (!sectionId) sectionId = 'home';
+  const el = document.getElementById(sectionId);
+  if (!el) sectionId = 'home';
+
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const section = document.getElementById(sectionId);
   if (section) section.classList.add('active');
 
   closeMobileNav();
+
+  // Historial: permite botón atrás del sistema / navegador
+  if (!fromHistory) {
+    const current = (history.state && history.state.section) || '';
+    if (current !== sectionId) {
+      try {
+        history.pushState({ section: sectionId }, '', '#' + sectionId);
+      } catch (err) {
+        console.warn(err);
+      }
+    } else {
+      try {
+        history.replaceState({ section: sectionId }, '', '#' + sectionId);
+      } catch (err) { /* ignore */ }
+    }
+  } else {
+    try {
+      history.replaceState({ section: sectionId }, '', '#' + sectionId);
+    } catch (err) { /* ignore */ }
+  }
 
   if (sectionId === 'search') {
     realizarBusqueda();
@@ -701,6 +736,18 @@ function showSection(sectionId) {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Botón atrás / adelante del navegador o del sistema (PWA)
+window.addEventListener('popstate', (e) => {
+  const sectionId = (e.state && e.state.section) || 'home';
+  // Si no hay estado (salida de la app), quedarnos en inicio en lugar de cerrar
+  if (!e.state) {
+    history.pushState({ section: 'home' }, '', '#home');
+    showSection('home', true);
+    return;
+  }
+  showSection(sectionId, true);
+});
 
 function toggleMenu() {
   const nav = document.getElementById('navLinks');
