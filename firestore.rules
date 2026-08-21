@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    match /quotes/{quoteId} {
+      allow read: if request.auth != null &&
+        (resource.data.profId == request.auth.uid ||
+         resource.data.clienteId == request.auth.uid);
+      allow create: if request.auth != null;
+      allow update: if request.auth != null &&
+        resource.data.profId == request.auth.uid;
+    }
+
+    // Las notificaciones las crea la Cloud Function (Admin SDK).
+    // El cliente solo puede leer y marcar como leídas las propias.
+    match /notifications/{notifId} {
+      allow read: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+      allow create: if false;
+      allow update: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}
