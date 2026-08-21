@@ -1,4 +1,3 @@
-
 // ===== DATA & STORAGE (Firebase) =====
 // currentUser se mantiene en memoria + sessionStorage para la UI
 let currentUserCache = null;
@@ -412,13 +411,22 @@ async function init() {
   setMaxFechaNacimiento();
   cargarCredencialesRecordadas();
 
-  // Historial inicial: inicio (o la sección del hash si existe)
-  const initialSection = (location.hash || '#home').replace('#', '') || 'home';
-  const validInitial = document.getElementById(initialSection) ? initialSection : 'home';
-  try {
-    history.replaceState({ section: validInitial }, '', '#' + validInitial);
-  } catch (err) { /* ignore */ }
-  showSection(validInitial, true);
+  // Historial inicial / deep link a perfil
+  const rawHash = (location.hash || '#home').replace(/^#/, '') || 'home';
+  if (rawHash.startsWith('profile/')) {
+    const profId = decodeURIComponent(rawHash.slice('profile/'.length));
+    try {
+      history.replaceState({ section: 'profile', profId }, '', '#profile/' + encodeURIComponent(profId));
+    } catch (err) { /* ignore */ }
+    showSection('profile', true);
+    if (profId) verPerfil(profId);
+  } else {
+    const validInitial = document.getElementById(rawHash) ? rawHash : 'home';
+    try {
+      history.replaceState({ section: validInitial }, '', '#' + validInitial);
+    } catch (err) { /* ignore */ }
+    showSection(validInitial, true);
+  }
 
   if (typeof firebaseReady === 'undefined' || !firebaseReady) {
     console.warn('Firebase no configurado — la app no persistirá datos en la nube.');
@@ -743,11 +751,15 @@ function showSection(sectionId, fromHistory) {
 
 // Botón atrás / adelante del navegador o del sistema (PWA)
 window.addEventListener('popstate', (e) => {
-  const sectionId = (e.state && e.state.section) || 'home';
-  // Si no hay estado (salida de la app), quedarnos en inicio en lugar de cerrar
   if (!e.state) {
     history.pushState({ section: 'home' }, '', '#home');
     showSection('home', true);
+    return;
+  }
+  const sectionId = e.state.section || 'home';
+  if (sectionId === 'profile' && e.state.profId) {
+    showSection('profile', true);
+    verPerfil(e.state.profId);
     return;
   }
   showSection(sectionId, true);
@@ -1525,9 +1537,17 @@ async function realizarBusqueda() {
             <button class="btn btn-primary btn-sm" onclick="verPerfil('${p.id}')">
               <i class="fas fa-user"></i> Ver perfil
             </button>
-            <a href="tel:${p.telefono}" class="btn btn-secondary btn-sm">
-              <i class="fas fa-phone"></i> Llamar
+            ${p.telefono ? `
+            <a href="tel:${p.telefono}" class="btn btn-call btn-sm">
+              <i class="fas fa-phone"></i>
             </a>
+            <a href="${urlWhatsApp(p.telefono, 'Hola, te contacto por Oficios YA!') || '#'}" class="btn btn-whatsapp btn-sm" target="_blank" rel="noopener">
+              <i class="fab fa-whatsapp"></i>
+            </a>
+            ` : ''}
+            <button type="button" class="btn btn-share btn-sm" onclick="compartirPerfil('${p.id}', '${(p.nombre || '').replace(/'/g, "\\'")}', '${(p.oficio || '').replace(/'/g, "\\'")}')">
+              <i class="fas fa-share-alt"></i>
+            </button>
           </div>
         </div>
       `;
@@ -1584,6 +1604,53 @@ function renderStars(rating) {
 }
 
 // ===== PROFILE VIEW =====
+
+// ===== CONTACTO Y COMPARTIR PERFIL =====
+function normalizarTelefonoAR(tel) {
+  let d = String(tel || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('54')) return d;
+  if (d.startsWith('0')) d = d.slice(1);
+  // Argentina: código país 54
+  return '54' + d;
+}
+
+function urlWhatsApp(tel, mensaje) {
+  const n = normalizarTelefonoAR(tel);
+  if (!n) return null;
+  const text = mensaje ? ('?text=' + encodeURIComponent(mensaje)) : '';
+  return 'https://wa.me/' + n + text;
+}
+
+function urlPerfilProfesional(profId) {
+  const base = window.location.href.split('?')[0].split('#')[0];
+  return base + '#profile/' + encodeURIComponent(profId);
+}
+
+async function compartirPerfil(profId, nombre, oficio) {
+  const url = urlPerfilProfesional(profId);
+  const title = (nombre || 'Profesional') + ' — Oficios YA!';
+  const text = 'Mirá el perfil de ' + (nombre || 'este profesional') +
+    (oficio ? ' (' + oficio + ')' : '') + ' en Oficios YA!';
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: title, text: text, url: url });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Link del perfil copiado. Ya podés pegarlo en WhatsApp.');
+  } catch (e2) {
+    window.prompt('Copiá este link del perfil:', url);
+  }
+}
+
+window.compartirPerfil = compartirPerfil;
+window.urlWhatsApp = urlWhatsApp;
+
 async function verPerfil(profId) {
   let prof;
   try {
@@ -1713,26 +1780,42 @@ async function verPerfil(profId) {
         ${reviewsHtml}
       </div>
 
-      <div class="prof-actions-bar">
+      <div class="prof-actions-bar prof-contact-actions">
+        ${prof.telefono ? `
+          <a class="btn btn-call" href="tel:${String(prof.telefono).replace(/"/g, '')}">
+            <i class="fas fa-phone"></i> Llamar
+          </a>
+          <a class="btn btn-whatsapp" href="${urlWhatsApp(prof.telefono, 'Hola ' + (prof.nombre || '') + ', te contacto por Oficios YA! Vi tu perfil de ' + (prof.oficio || 'profesional') + ' y quería consultar por un trabajo.') || '#'}" target="_blank" rel="noopener" ${urlWhatsApp(prof.telefono) ? '' : 'onclick="showToast(\'No hay un teléfono válido para WhatsApp\', \'error\'); return false;"'}>
+            <i class="fab fa-whatsapp"></i> WhatsApp
+          </a>
+        ` : `
+          <span class="btn btn-secondary" style="opacity:0.7;cursor:default;"><i class="fas fa-phone-slash"></i> Sin teléfono</span>
+        `}
+        <button type="button" class="btn btn-share" onclick="compartirPerfil('${prof.id}', '${(prof.nombre || '').replace(/'/g, "\\'")}', '${(prof.oficio || '').replace(/'/g, "\\'")}')">
+          <i class="fas fa-share-alt"></i> Compartir
+        </button>
         ${puedeResenar ? `
           <button class="btn btn-primary" onclick="abrirModalPresupuesto('${prof.id}', '${(prof.nombre || '').replace(/'/g, "\\'")}')">
             <i class="fas fa-file-invoice-dollar"></i> Solicitar presupuesto
           </button>
-          <a class="btn btn-secondary" href="tel:${prof.telefono || ''}"><i class="fas fa-phone"></i> Llamar</a>
         ` : !currentUser ? `
-          <button class="btn btn-primary" onclick="showSection('login')">
-            <i class="fas fa-sign-in-alt"></i> Iniciá sesión para contactar
+          <button class="btn btn-secondary" onclick="showSection('login')">
+            <i class="fas fa-sign-in-alt"></i> Ingresá para pedir presupuesto
           </button>
         ` : ''}
         <button class="btn btn-secondary" onclick="showSection('search')">
-          <i class="fas fa-arrow-left"></i> Volver a la búsqueda
+          <i class="fas fa-arrow-left"></i> Volver
         </button>
       </div>
     </div>
   `;
 
   document.getElementById('profileContent').innerHTML = content;
-  showSection('profile');
+  // Deep link compartible: #profile/ID
+  try {
+    history.pushState({ section: 'profile', profId: profId }, '', '#profile/' + encodeURIComponent(profId));
+  } catch (e) { /* ignore */ }
+  showSection('profile', true);
 }
 
 // ===== MY PROFILE (profesional logueado) =====
