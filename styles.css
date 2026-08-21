@@ -1,3 +1,4 @@
+
 /* ===== VARIABLES & RESET ===== */
 :root {
   --primary: #e85d04;
@@ -2779,6 +2780,10 @@ img {
 @media (max-width: 768px) {
   .bottom-nav {
     display: grid;
+    /* Visible por defecto en todas las secciones */
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
   }
 
   body {
