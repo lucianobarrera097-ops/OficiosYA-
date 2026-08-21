@@ -192,42 +192,42 @@
       <h2 class="section-title">Oficios más buscados</h2>
       <div class="oficios-grid">
         <div class="oficio-card" onclick="quickSearch('Plomería')">
-          <img src="https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=500&h=300&fit=crop" alt="Plomero trabajando en cañerías" loading="lazy">
+          <img src="./oficio-plomeria.jpg" alt="Plomero trabajando en cañerías" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-faucet"></i> Plomería</h3>
             <p>Pérdidas, destapes e instalaciones del hogar</p>
           </div>
         </div>
         <div class="oficio-card" onclick="quickSearch('Gasista')">
-          <img src="https://images.unsplash.com/photo-1556912173-46c336c7fd55?w=500&h=300&fit=crop" alt="Cocina y artefactos a gas del hogar" loading="lazy">
+          <img src="./oficio-gasista.jpg" alt="Gasista matriculado con medidor de gas" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-fire"></i> Gasista</h3>
             <p>Instalaciones, termotanques y matriculados</p>
           </div>
         </div>
         <div class="oficio-card" onclick="quickSearch('Electricista')">
-          <img src="https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=500&h=300&fit=crop" alt="Electricista en tablero eléctrico" loading="lazy">
+          <img src="./oficio-electricista.jpg" alt="Electricista trabajando en la instalación" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-bolt"></i> Electricista</h3>
             <p>Tableros, tomas y arreglos eléctricos</p>
           </div>
         </div>
         <div class="oficio-card" onclick="quickSearch('Pintor')">
-          <img src="https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&h=300&fit=crop" alt="Pintor con rodillo en pared" loading="lazy">
+          <img src="./oficio-pintor.jpg" alt="Pintor con rodillo en pared" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-paint-roller"></i> Pintor</h3>
             <p>Paredes, frentes y revoques a nuevo</p>
           </div>
         </div>
         <div class="oficio-card" onclick="quickSearch('Albañil')">
-          <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&h=300&fit=crop" alt="Obra de albañilería y construcción" loading="lazy">
+          <img src="./oficio-albanil.jpg" alt="Albañil en obra levantando muro" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-hard-hat"></i> Albañil</h3>
             <p>Obras, refacciones y muros</p>
           </div>
         </div>
         <div class="oficio-card" onclick="quickSearch('Carpintero')">
-          <img src="https://images.unsplash.com/photo-1452860606245-08befc0ff44b?w=500&h=300&fit=crop" alt="Carpintero trabajando la madera" loading="lazy">
+          <img src="./oficio-carpintero.jpg" alt="Carpintero trabajando la madera" loading="lazy">
           <div class="oficio-info">
             <h3><i class="fas fa-hammer"></i> Carpintero</h3>
             <p>Muebles a medida, puertas y aberturas</p>
@@ -783,6 +783,22 @@
   </div>
 
   <!-- Soporte técnico: burbuja + chat -->
+  <!-- Barra inferior móvil -->
+  <nav class="bottom-nav" id="bottomNav" aria-label="Navegación principal">
+    <button type="button" class="bottom-nav-item active" data-nav="home" onclick="navBottom('home')">
+      <i class="fas fa-home"></i>
+      <span>Inicio</span>
+    </button>
+    <button type="button" class="bottom-nav-item" data-nav="search" onclick="navBottom('search')">
+      <i class="fas fa-search"></i>
+      <span>Buscar</span>
+    </button>
+    <button type="button" class="bottom-nav-item" data-nav="profile" onclick="navBottom('profile')">
+      <i class="fas fa-user"></i>
+      <span>Perfil</span>
+    </button>
+  </nav>
+
   <div id="supportBubble" class="support-bubble" onclick="toggleSupportChat()" title="Soporte técnico">
     <i class="fas fa-headset"></i>
     <span class="support-pulse"></span>
