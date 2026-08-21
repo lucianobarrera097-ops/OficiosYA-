@@ -2589,7 +2589,7 @@ function mostrarBarraInferior() {
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
     bar.classList.remove('visible');
-  }, 6000);
+  }, 8000);
 }
 
 function actualizarBarraInferior(sectionId) {
